@@ -4,7 +4,7 @@ set -e
 
 # 配置变量
 GITHUB_USERNAME="MaroD1M"  # 请替换为你的GitHub用户名
-IMAGE_NAME="ghcr.io/$GITHUB_USERNAME/word-excel-replace-tool:latest"
+IMAGE_NAME="ghcr.io/$GITHUB_USERNAME/word-excel-replace:latest"
 CONTAINER_NAME="word-excel-replace-tool"
 PORT="8501"
 
