@@ -1,10 +1,15 @@
 # 修复版本检查问题 - 放在所有 import 之前
 import os
 import sys
+import warnings
+
+# 过滤特定警告
+warnings.filterwarnings("ignore", category=UserWarning)
 
 # 设置环境变量避免版本检查
 os.environ["STREAMLIT_VERSION"] = "1.51.0"
 os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
+os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
 # 手动修复 importlib.metadata 问题
 try:
@@ -642,4 +647,5 @@ with st.container():
     - 替换结果会持久化存储，下载后不会消失；
     - 修改规则或替换范围后，需重新执行替换；
     - 大文件建议分批次处理（每次1000行以内）。
+
     """, unsafe_allow_html=True)
