@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   word-excel-replace:
-    image: ghcr.io/${GITHUB_USERNAME}/word-excel-replace-tool:${TAG:-latest}
+    image: ghcr.io/${GITHUB_USERNAME:-MaroD1M}/word-excel-replace-tool:${TAG:-latest}
     container_name: word-excel-replace-tool
     ports:
-      - "${EXTERNAL_PORT}:8501"
+      - "${EXTERNAL_PORT:-12344}:8501"
     restart: unless-stopped
     environment:
       - STREAMLIT_SERVER_HEADLESS=true
@@ -13,4 +13,5 @@ services:
     # 可选：数据持久化
     # volumes:
     #   - ./data:/app/data
+
 
