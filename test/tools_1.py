@@ -9,7 +9,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
 
-# ---------------------- 数据结构与初始化 ----------------------
+# ---------------------- 数据结构与初始化 ---------------------
 @dataclass
 class ReplacedFile:
     """存储替换后的文件数据"""
