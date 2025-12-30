@@ -1,6 +1,9 @@
 import os
 import sys
+import tempfile
 import warnings
+import shutil
+import json
 
 # 过滤特定警告
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -40,6 +43,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple
+from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 
 # 设置页面配置
 st.set_page_config(
@@ -83,9 +88,156 @@ def clean_text(text: str) -> str:
     text = re.sub(r'\s+', ' ', text)  # 合并连续空格
     return text
 
+
+def extract_core_keyword(text: str) -> str:
+    """从各种格式的文本中提取核心关键词
+    支持格式：我是xx, 【xx】, （xx）, (xx)
+    """
+    cleaned = clean_text(text)
+    if not cleaned:
+        return ""
+    
+    # 从四种格式中提取核心关键词
+    if cleaned.startswith("我是"):
+        return cleaned[2:]
+    elif cleaned.startswith("【") and cleaned.endswith("】"):
+        return cleaned[1:-1]
+    elif cleaned.startswith("（") and cleaned.endswith("）"):
+        return cleaned[1:-1]
+    elif cleaned.startswith("(") and cleaned.endswith(")"):
+        return cleaned[1:-1]
+    return cleaned
+
+
+def generate_all_formats(core_keyword: str) -> List[str]:
+    """生成所有支持的格式关键词列表
+    格式：我是xx, 【xx】, （xx）, (xx)
+    """
+    if not core_keyword:
+        return []
+    return [
+        f"我是{core_keyword}",
+        f"【{core_keyword}】",
+        f"（{core_keyword}）",
+        f"({core_keyword})"
+    ]
+
+
 def clean_filename(filename: str) -> str:
     """清理文件名非法字符"""
     return re.sub(r'[\\/:*?"<>|]', "_", str(filename))
+
+
+# ---------------------- 修复后的替换函数 ----------------------
+def precompute_replace_patterns(replace_rules, excel_row):
+    """预计算所有需要替换的模式和对应的替换值，减少重复计算"""
+    replace_patterns = []
+    
+    for old_text, col_name in replace_rules:
+        core_keyword = extract_core_keyword(old_text)
+        all_formats = generate_all_formats(core_keyword)
+        replacement = str(excel_row[col_name])
+        
+        # 为每个格式的关键字创建替换规则
+        for format_keyword in all_formats:
+            replace_patterns.append((old_text, col_name, format_keyword, replacement))
+    
+    return replace_patterns
+
+
+def process_paragraph(paragraph, replace_patterns, cleaned_para=None):
+    """处理单个段落的关键字替换，避免重复代码"""
+    para_text = paragraph.text
+    if cleaned_para is None:
+        cleaned_para = clean_text(para_text)
+    replace_count = defaultdict(int)
+    has_keyword = False
+    
+    # 检查段落是否包含任何需要替换的关键字
+    for old_text, col_name, format_keyword, replacement in replace_patterns:
+        if format_keyword in cleaned_para:
+            has_keyword = True
+            break
+    
+    if has_keyword:
+        # 创建新文本并替换所有关键字
+        new_text = para_text
+        for old_text, col_name, format_keyword, replacement in replace_patterns:
+            if format_keyword in cleaned_para:
+                new_text = new_text.replace(format_keyword, replacement)
+                replace_count[(old_text, col_name)] += 1
+        
+        # 清空所有现有Run并添加新的Run（保留格式）
+        if len(paragraph.runs) > 0:
+            # 保留第一个Run的格式
+            paragraph.runs[0].text = new_text
+            # 清空其他Run
+            for i in range(1, len(paragraph.runs)):
+                paragraph.runs[i].text = ''
+    
+    return replace_count
+
+
+def replace_word_with_format(word_file: st.runtime.uploaded_file_manager.UploadedFile, 
+                          excel_row: pd.Series, 
+                          replace_rules: List[Tuple[str, str]]) -> Tuple[io.BytesIO, str]:
+    """替换Word文件中的关键字，保留格式并返回替换后的文件"""
+    
+    replace_count = defaultdict(int)
+    replace_log = []
+    
+    # 创建临时文件
+    temp_dir = tempfile.mkdtemp()
+    temp_word_path = os.path.join(temp_dir, "temp_word.docx")
+    
+    try:
+        # 保存上传的Word文件到临时位置
+        with open(temp_word_path, "wb") as f:
+            f.write(word_file.getvalue())
+        
+        # 加载Word文档
+        doc = Document(temp_word_path)
+        
+        # 预计算替换模式，减少重复计算
+        replace_patterns = precompute_replace_patterns(replace_rules, excel_row)
+        
+        # 1. 处理段落
+        for paragraph in doc.paragraphs:
+            para_count = process_paragraph(paragraph, replace_patterns)
+            for key, count in para_count.items():
+                replace_count[key] += count
+        
+        # 2. 处理表格
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        para_count = process_paragraph(paragraph, replace_patterns)
+                        for key, count in para_count.items():
+                            replace_count[key] += count
+        
+        # 保存修改后的文档
+        output_file = io.BytesIO()
+        doc.save(output_file)
+        output_file.seek(0)
+        
+        # 生成替换日志
+        if replace_count:
+            log_lines = [f"替换成功: {old} -> {excel_row[col_name]} ({count}次)" 
+                        for (old, col_name), count in replace_count.items()]
+            replace_log = "\n".join(log_lines)
+        else:
+            replace_log = "未找到需要替换的关键字"
+            
+        return output_file, replace_log
+        
+    except Exception as e:
+        # 生成错误日志
+        error_log = f"替换失败: {str(e)}"
+        return io.BytesIO(), error_log
+    finally:
+        # 清理临时文件
+        shutil.rmtree(temp_dir)
 
 def get_replace_params(
         word_file: Optional[st.runtime.uploaded_file_manager.UploadedFile],
@@ -108,22 +260,27 @@ def get_replace_params(
     }
 
 def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
-    """清理Excel数据类型，避免混合类型导致的序列化错误"""
+    """清理Excel数据类型，避免混合类型导致的序列化错误，并修复数值精度问题"""
     df_clean = df.copy()
+    
     for col in df_clean.columns:
-        # 检查列是否包含混合类型（数字+字符串）
-        if df_clean[col].dtype == 'object':
-            # 尝试转换为数字，无法转换的保留字符串（如"合计"）
-            try:
-                # 先去除空格和特殊字符
-                df_clean[col] = df_clean[col].astype(str).str.strip()
-                # 对纯数字字符串转换为数字，其他保留字符串
-                df_clean[col] = pd.to_numeric(df_clean[col], errors='ignore')
-            except:
-                # 转换失败时直接转为字符串
-                df_clean[col] = df_clean[col].astype(str)
-        # 确保所有列都能被Arrow序列化
-        df_clean[col] = df_clean[col].astype(str).fillna("")
+        try:
+            # 确保列名是字符串
+            col_name = str(col)
+            if col_name != col:
+                df_clean = df_clean.rename(columns={col: col_name})
+                col = col_name
+            
+            # 1. 处理空值 - 只处理真正的空值，保留字符串类型的空字符串
+            df_clean[col] = df_clean[col].fillna("")
+            
+            # 2. 只去除前后空格，不做任何其他类型转换
+            df_clean[col] = df_clean[col].str.strip()
+            
+        except Exception as e:
+            # 出现错误时，强制转换为字符串并去除空格
+            df_clean[col] = df_clean[col].astype(str).str.strip()
+    
     return df_clean
 
 # ---------------------- 页面标题与简介 ----------------------
@@ -217,9 +374,14 @@ with st.container(border=True):
                 st.components.v1.html(word_html, height=300)
                 st.info("💡 选中需要替换的关键字（支持表格内文字），按Ctrl+C复制", icon="ℹ️")
                 word_preview_loaded = True
+                # 删除临时文件
+                os.unlink(temp_word_path)
 
             except Exception as e:
                 st.error(f"❌ Word预览失败：{str(e)}", icon="❌")
+                # 确保临时文件被删除
+                if 'temp_word_path' in locals():
+                    os.unlink(temp_word_path)
         else:
             st.info("请先上传Word模板文件", icon="ℹ️")
             st.markdown(
@@ -232,31 +394,161 @@ with st.container(border=True):
         if excel_file:
             try:
                 # 读取Excel并清理数据类型
-                excel_df = pd.read_excel(excel_file, engine="openpyxl")
-                excel_df = clean_excel_types(excel_df)  # 修复混合类型问题
-                excel_cols = excel_df.columns.tolist()
+                # 使用NamedTemporaryFile自动管理临时文件
+                with NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
+                    temp_excel.write(excel_file.getvalue())
+                    excel_path = temp_excel.name
+                
+                try:
+                    # 简化Excel读取：使用pandas读取，但设置keep_default_na=False避免自动转换
+                    excel_wb = pd.ExcelFile(excel_path, engine="openpyxl")
+                    sheet_names = excel_wb.sheet_names
+                    selected_sheet = sheet_names[0]
+                    st.markdown(f"⚠️ 当前使用工作表：{selected_sheet}", unsafe_allow_html=True)
+                    
+                    # 使用pandas读取Excel，但避免自动类型转换
+                    excel_df = pd.read_excel(
+                        excel_wb,
+                        sheet_name=selected_sheet,
+                        dtype=str,  # 以字符串形式读取所有列
+                        keep_default_na=False,  # 不自动将空值转换为NaN
+                        na_values=[]  # 不将任何值视为NA
+                    )
+                    
+                    # 添加后处理步骤：修复浮点数精度问题
+                    from decimal import Decimal, ROUND_HALF_UP
+                    import re
+                    
+                    def fix_float_precision(x, column_name=None):
+                        """修复浮点数精度问题，将0.48729999999999996转换为0.4873"""
+                        if not x or not isinstance(x, str):
+                            return x
+                        
+                        # 移除前后空格
+                        x = x.strip()
+                        
+                        # 检查是否为空字符串
+                        if not x:
+                            return ""
+                        
+                        # 检查是否是纯整数
+                        if x.isdigit():
+                            return x
+                        
+                        # 使用更宽松的正则表达式检查是否是浮点数格式
+                        float_pattern = r'^\s*[-+]?\d*\.?\d+\s*$'
+                        if not re.match(float_pattern, x):
+                            return x
+                        
+                        try:
+                            # 使用Decimal进行更精确的计算
+                            dec_value = Decimal(x)
+                            
+                            # 检查是否为整数
+                            if dec_value.as_tuple().exponent >= 0:
+                                return str(int(dec_value))
+                            
+                            # 将Decimal值转换为浮点数，暴露精度问题
+                            float_val = float(dec_value)
+                            float_str = str(float_val)
+                            
+                            # 特别针对合计列的处理
+                            if column_name and ("合计" in column_name or "total" in column_name.lower()):
+                                # 合计列通常需要2-4位小数
+                                # 尝试保留2-6位小数，找到最合适的
+                                for dec_places in range(2, 7):
+                                    # 量化到指定小数位数
+                                    quantized = dec_value.quantize(
+                                        Decimal('1.' + '0' * dec_places),
+                                        rounding=ROUND_HALF_UP
+                                    )
+                                    
+                                    # 检查量化后的值是否足够接近原始值
+                                    if abs(quantized - dec_value) < 1e-9:
+                                        result = format(quantized, f'.{dec_places}f')
+                                        # 移除尾部的0和小数点
+                                        return result.rstrip('0').rstrip('.') if '.' in result else result
+                            
+                            # 检查是否有精度问题的特征：大量的9或0
+                            if '999999' in float_str or '000000' in float_str:
+                                # 对于有精度问题的数值，智能判断应该保留的小数位数
+                                
+                                # 方法1：分析原始字符串中的有效小数位数
+                                if '.' in x:
+                                    orig_dec_part = x.split('.')[1]
+                                    orig_dec_places = len(orig_dec_part.rstrip('0'))
+                                    
+                                    if orig_dec_places > 0:
+                                        # 尝试保留原始小数位数
+                                        quantized = dec_value.quantize(
+                                            Decimal('1.' + '0' * orig_dec_places),
+                                            rounding=ROUND_HALF_UP
+                                        )
+                                        result = format(quantized, f'.{orig_dec_places}f')
+                                        return result.rstrip('0').rstrip('.') if '.' in result else result
+                                
+                                # 方法2：尝试不同的小数位数，找到最合适的
+                                for dec_places in range(1, 10):
+                                    formatted = format(float_val, f'.{dec_places}f')
+                                    if abs(float(formatted) - float_val) < 1e-9:
+                                        return formatted.rstrip('0').rstrip('.') if '.' in formatted else formatted
+                            
+                            # 如果没有明显的精度问题，直接使用原始值
+                            return x
+                        except Exception as e:
+                            # 如果转换失败，尝试直接使用浮点数格式化
+                            try:
+                                float_val = float(x)
+                                # 默认保留6位小数
+                                return format(float_val, '.6f').rstrip('0').rstrip('.') if '.' in format(float_val, '.6f') else format(float_val, '.6f')
+                            except:
+                                # 如果所有方法都失败，返回原始字符串
+                                return x
+                    
+                    # 对所有列应用浮点数精度修复
+                    for col in excel_df.columns:
+                        # 传递列名给修复函数，以便针对不同列进行特殊处理
+                        excel_df[col] = excel_df[col].apply(lambda x: fix_float_precision(x, col))
+                    
 
-                # 显示数据预览（最多显示20行）
-                preview_df = excel_df.head(20)
-                st.dataframe(
-                    preview_df,
-                    use_container_width=True,
-                    height=250,
-                    hide_index=True
-                )
+                    
+                    # 清理数据类型
+                    excel_df = clean_excel_types(excel_df)
+                    excel_cols = excel_df.columns.tolist()
 
-                # 数据统计
-                st.markdown(f"""
-                <div style='margin-top: 10px; font-size: 13px; color: #666;'>
-                数据统计：共 {len(excel_df)} 行 × {len(excel_cols)} 列<br>
-                列名：{', '.join(excel_cols[:5])}{'...' if len(excel_cols) > 5 else ''}
-                </div>
-                """, unsafe_allow_html=True)
+                    # 显示处理后的数据预览（最多显示20行）
+                    preview_df = excel_df.head(20)
+                    st.dataframe(
+                        preview_df,
+                        width='stretch',  # 替换use_container_width=True
+                        height=250,
+                        hide_index=True
+                    )
+
+                    # 数据统计
+                    st.markdown(f"""
+                    <div style='margin-top: 10px; font-size: 13px; color: #666;'>
+                    数据统计：共 {len(excel_df)} 行 × {len(excel_cols)} 列<br>
+                    列名：{', '.join(excel_cols[:5])}{'...' if len(excel_cols) > 5 else ''}
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+
+                    
+                finally:
+                    # 确保临时文件被删除，添加错误处理
+                    try:
+                        if os.path.exists(excel_path):
+                            os.unlink(excel_path)
+                    except PermissionError:
+                        # 如果删除失败，记录警告但不中断程序
+                        st.warning("⚠️ 临时Excel文件正在被使用，将在稍后自动清理", icon="ℹ️")
 
             except Exception as e:
                 st.error(f"❌ Excel读取失败：{str(e)}", icon="❌")
                 excel_df = None
                 excel_cols = []
+                # 临时文件已在finally块中处理，这里不需要重复删除
         else:
             st.info("请先上传Excel数据文件", icon="ℹ️")
             st.markdown(
@@ -268,6 +560,40 @@ st.markdown("---")
 # ---------------------- 3. 替换规则设置 ----------------------
 with st.container(border=True):
     st.subheader("⚙️ 第三步：设置替换规则")
+    
+    # 导入/导出区域
+    col_import, col_export_placeholder = st.columns([1, 1], gap="medium")
+    with col_import:
+        import json
+        
+        # 导入替换规则
+        import_rules = st.file_uploader(
+            "导入替换规则",
+            type=["json"],
+            key="import_rules",
+            label_visibility="collapsed"
+        )
+        
+        if import_rules:
+            try:
+                # 读取并解析JSON文件
+                rules_data = json.load(import_rules)
+                
+                # 验证规则格式
+                valid_rules = []
+                for rule in rules_data:
+                    if "keyword" in rule and "excel_column" in rule:
+                        valid_rules.append((rule["keyword"], rule["excel_column"]))
+                
+                # 添加有效规则
+                for rule in valid_rules:
+                    if rule not in st.session_state.replace_rules:
+                        st.session_state.replace_rules.append(rule)
+                
+                st.success(f"✅ 成功导入 {len(valid_rules)} 条规则", icon="✅")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 导入失败：{str(e)}", icon="❌")
 
     # 规则添加区域
     col1, col2, col3 = st.columns([2, 2, 1], gap="medium")
@@ -305,7 +631,7 @@ with st.container(border=True):
             "➕ 添加规则",
             type="primary",
             disabled=excel_df is None or not cleaned_old_text,
-            use_container_width=True
+            width='stretch'
         )
 
     # 添加规则逻辑
@@ -335,7 +661,7 @@ with st.container(border=True):
         with col_rule:
             st.dataframe(
                 rule_df,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
                 height=min(150, len(st.session_state.replace_rules) * 35 + 30)
             )
@@ -353,17 +679,38 @@ with st.container(border=True):
                     key="delete_idx",
                     label_visibility="collapsed"
                 )
-                if st.button("🗑️ 删除", use_container_width=True):
+                if st.button("🗑️ 删除", width='stretch'):
                     st.session_state.replace_rules.pop(delete_idx)
                     # 规则变更，需要重新替换
                     st.session_state.replaced_files = []
                     st.rerun()
 
             with col_clear:
-                if st.button("🧹 清空", use_container_width=True, type="secondary"):
+                if st.button("🧹 清空", width='stretch', type="secondary"):
                     st.session_state.replace_rules.clear()
                     st.session_state.replaced_files = []
                     st.rerun()
+        
+        # 规则导出功能
+        # 准备导出数据
+        rules_data = [{
+            "keyword": rule[0],
+            "excel_column": rule[1]
+        } for rule in st.session_state.replace_rules]
+        
+        # 转换为JSON字符串
+        json_data = json.dumps(rules_data, ensure_ascii=False, indent=2)
+        json_bytes = json_data.encode('utf-8')
+        
+        # 导出按钮
+        st.download_button(
+            label="📥 导出替换规则",
+            data=json_bytes,
+            file_name="replace_rules.json",
+            mime="application/json",
+            disabled=not st.session_state.replace_rules,
+            width='stretch'
+        )
     else:
         st.info("暂无替换规则，请添加规则后再执行替换", icon="ℹ️")
 
@@ -444,7 +791,7 @@ with st.container(border=True):
             replace_btn = st.button(
                 replace_btn_text,
                 type="primary",
-                use_container_width=True,
+                width='stretch',
                 disabled=st.session_state.is_replacing
             )
 
@@ -466,50 +813,6 @@ with st.container(border=True):
             try:
                 target_df = excel_df.iloc[start_row:end_row + 1].reset_index(drop=True)
                 st.info(f"📌 正在替换 {len(target_df)} 行数据...", icon="ℹ️")
-
-                # 修复：使用兼容的类型注解
-                def replace_word_with_format(word_file, excel_row, replace_rules):
-                    with NamedTemporaryFile(delete=False, suffix=".docx") as temp_word:
-                        temp_word.write(word_file.getvalue())
-                        temp_word_path = temp_word.name
-
-                    doc = Document(temp_word_path)
-                    replace_count = {old: 0 for old, _ in replace_rules}
-
-                    # 替换段落文字
-                    for paragraph in doc.paragraphs:
-                        for run in paragraph.runs:
-                            original_text = run.text
-                            cleaned_text = clean_text(original_text)
-                            for old_text, col_name in replace_rules:
-                                if old_text in cleaned_text:
-                                    # 确保替换值为字符串（避免类型错误）
-                                    new_text = str(excel_row[col_name])
-                                    run.text = original_text.replace(old_text, new_text)
-                                    replace_count[old_text] += 1
-
-                    # 替换表格文字
-                    for table in doc.tables:
-                        for row in table.rows:
-                            for cell in row.cells:
-                                for paragraph in cell.paragraphs:
-                                    for run in paragraph.runs:
-                                        original_text = run.text
-                                        cleaned_text = clean_text(original_text)
-                                        for old_text, col_name in replace_rules:
-                                            if old_text in cleaned_text:
-                                                new_text = str(excel_row[col_name])
-                                                run.text = original_text.replace(old_text, new_text)
-                                                replace_count[old_text] += 1
-
-                    # 生成日志
-                    log_parts = [f"【{old}】{count}处" for old, count in replace_count.items()]
-                    log = " | ".join(log_parts) if log_parts else "未匹配任何关键字"
-
-                    output = io.BytesIO()
-                    doc.save(output)
-                    output.seek(0)
-                    return output, log
 
                 # 批量处理
                 for idx, (row_idx, row) in enumerate(target_df.iterrows()):
@@ -572,7 +875,7 @@ with st.container(border=True):
                     data=file.data,
                     file_name=file.filename,
                     key=f"download_single_{file.row_idx}",
-                    use_container_width=True
+                    width='stretch'
                 )
 
             # 批量下载（ZIP）
@@ -582,7 +885,7 @@ with st.container(border=True):
             batch_btn = st.button(
                 "下载全部文件（ZIP压缩包）",
                 type="primary",
-                use_container_width=True
+                width='stretch'
             )
 
             if batch_btn:
@@ -600,7 +903,7 @@ with st.container(border=True):
                     file_name=zip_filename,
                     mime="application/zip",
                     key="download_batch",
-                    use_container_width=True
+                    width='stretch'
                 )
 
             # 替换日志
@@ -648,5 +951,3 @@ with st.container():
     - 大文件建议分批次处理（每次1000行以内）。
 
     """, unsafe_allow_html=True)
-
-
