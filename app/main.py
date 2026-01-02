@@ -1,12 +1,32 @@
+# 导入标准库
 import os
 import sys
 import tempfile
+from tempfile import NamedTemporaryFile
 import warnings
 import shutil
 import json
+import io
+import zipfile
+import re
+import unicodedata
+
+# 导入第三方库
+import streamlit as st
+import pandas as pd
+from docx import Document
+from dataclasses import dataclass
+from typing import List, Optional, Dict, Tuple
+from collections import defaultdict
+from decimal import Decimal, ROUND_HALF_UP
 
 # 项目版本信息
-VERSION = "1.2.0"
+VERSION = "1.2.1"
+
+# 配置常量
+PAGE_SIZE = 10  # 每页显示的文件数
+WIDGET_HEIGHT = 300  # 组件高度
+PREVIEW_ROWS = 30  # 数据预览行数
 
 # 过滤特定警告，避免干扰用户界面
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -15,20 +35,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 os.environ["STREAMLIT_VERSION"] = "1.51.0"
 os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-
-# 导入核心库
-import streamlit as st
-import pandas as pd
-from docx import Document
-import io
-import zipfile
-from tempfile import NamedTemporaryFile
-import re
-import unicodedata
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Tuple
-from collections import defaultdict
-from decimal import Decimal, ROUND_HALF_UP
 
 # 设置页面配置
 st.set_page_config(
@@ -71,6 +77,20 @@ st.markdown("""
     .streamlit-expander {
         margin-bottom: 15px;
     }
+    
+    /* 行悬停效果（统一规则列表和结果列表） */
+    .data-row-item {
+        padding: 8px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        height: 100%;
+    }
+    .data-row-item:hover {
+        background-color: #f0f2f6;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -91,21 +111,24 @@ class ReplacedFile:
     row_idx: int  # 对应Excel行号
     log: str  # 替换日志
 
-# 初始化会话状态（完整且规范）
-required_states = {
-    "replace_rules": [],  # 替换规则列表：[(关键词, Excel列名), ...]
-    "replaced_files": [],  # 替换后的文件列表
-    "replace_log": [],  # 替换日志
-    "is_replacing": False,  # 替换中状态标识，防止重复提交
-    "clear_input": False,  # 输入框清空控制
-    "replace_params": {},  # 替换参数（用于判断是否需要重新替换）
-    "replace_scope": "替换完整关键词",  # 替换范围选项
-}
+def init_session_state():
+    """初始化会话状态，确保所有必要的键都存在"""
+    required_states = {
+        "replace_rules": [],  # 替换规则列表：[(关键词, Excel列名), ...]
+        "replaced_files": [],  # 替换后的文件列表
+        "replace_log": [],  # 替换日志
+        "is_replacing": False,  # 替换中状态标识，防止重复提交
+        "clear_input": False,  # 输入框清空控制
+        "replace_params": {},  # 替换参数（用于判断是否需要重新替换）
+        "replace_scope": "替换完整关键词",  # 替换范围选项
+    }
 
-# 初始化会话状态，确保所有必要的键都存在
-for key, default in required_states.items():
-    if key not in st.session_state:
-        st.session_state[key] = default
+    for key, default in required_states.items():
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+# 调用会话状态初始化函数
+init_session_state()
 
 # ---------------------- 核心工具函数 ----------------------
 def clean_text(text: str) -> str:
@@ -244,17 +267,9 @@ def replace_word_with_format(word_file: st.runtime.uploaded_file_manager.Uploade
     replace_count = defaultdict(int)
     replace_log = []
     
-    # 创建临时文件目录
-    temp_dir = tempfile.mkdtemp()
-    temp_word_path = os.path.join(temp_dir, "temp_word.docx")
-    
     try:
-        # 保存上传的Word文件到临时位置
-        with open(temp_word_path, "wb") as f:
-            f.write(word_file.getvalue())
-        
-        # 加载Word文档
-        doc = Document(temp_word_path)
+        # 直接从内存加载Word文档（优化：避免创建临时文件）
+        doc = Document(io.BytesIO(word_file.getvalue()))
         
         # 预计算替换模式，减少重复计算（优化性能）
         replace_patterns = precompute_replace_patterns(replace_rules, excel_row)
@@ -290,12 +305,10 @@ def replace_word_with_format(word_file: st.runtime.uploaded_file_manager.Uploade
         return output_file, replace_log
         
     except Exception as e:
-        # 生成错误日志
-        error_log = f"替换失败: {str(e)}"
+        # 生成详细错误日志
+        import traceback
+        error_log = f"替换失败: {str(e)}\n{traceback.format_exc()}"
         return io.BytesIO(), error_log
-    finally:
-        # 清理临时文件目录
-        shutil.rmtree(temp_dir)
 
 
 def get_replace_params(
@@ -514,13 +527,8 @@ with st.container(border=True):
         st.markdown("#### Word预览（含表格）")
         if word_file:
             try:
-                # 创建临时文件并保存上传的Word内容
-                with NamedTemporaryFile(delete=False, suffix=".docx") as temp_word:
-                    temp_word.write(word_file.getvalue())
-                    temp_word_path = temp_word.name
-
-                # 加载Word文档
-                doc = Document(temp_word_path)
+                # 直接从内存加载Word文档，避免创建临时文件
+                doc = Document(io.BytesIO(word_file.getvalue()))
                 word_html = "<div style='height: 280px; overflow-y: auto; padding: 8px; border: 1px solid #eee; font-size: 13px; line-height: 1.5;'>"
 
                 # 段落预览（包含基本格式）
@@ -563,10 +571,6 @@ with st.container(border=True):
                 
             except Exception as e:
                 st.error(f"❌ Word预览失败：{str(e)}", icon="❌")
-            finally:
-                # 确保临时文件被删除
-                if 'temp_word_path' in locals() and os.path.exists(temp_word_path):
-                    os.unlink(temp_word_path)
         else:
             st.info("请先上传Word模板文件", icon="ℹ️")
             # 显示占位符
@@ -585,20 +589,20 @@ with st.container(border=True):
                     excel_path = temp_excel.name
                 
                 try:
-                    # 简化Excel读取：使用pandas读取，但设置keep_default_na=False避免自动转换
-                    excel_wb = pd.ExcelFile(excel_path, engine="openpyxl")
-                    sheet_names = excel_wb.sheet_names
-                    selected_sheet = sheet_names[0]  # 默认使用第一个工作表
-                    st.markdown(f"⚠️ 当前使用工作表：{selected_sheet}", unsafe_allow_html=True)
-                    
-                    # 使用pandas读取Excel，但避免自动类型转换
-                    excel_df = pd.read_excel(
-                        excel_wb,
-                        sheet_name=selected_sheet,
-                        dtype=str,  # 以字符串形式读取所有列
-                        keep_default_na=False,  # 不自动将空值转换为NaN
-                        na_values=[]  # 不将任何值视为NA
-                    )
+                    # 使用上下文管理器自动关闭Excel文件句柄，避免资源泄漏
+                    with pd.ExcelFile(excel_path, engine="openpyxl") as excel_wb:
+                        sheet_names = excel_wb.sheet_names
+                        selected_sheet = sheet_names[0]  # 默认使用第一个工作表
+                        st.markdown(f"⚠️ 当前使用工作表：{selected_sheet}", unsafe_allow_html=True)
+                        
+                        # 使用pandas读取Excel，但避免自动类型转换
+                        excel_df = pd.read_excel(
+                            excel_wb,
+                            sheet_name=selected_sheet,
+                            dtype=str,  # 以字符串形式读取所有列
+                            keep_default_na=False,  # 不自动将空值转换为NaN
+                            na_values=[]  # 不将任何值视为NA
+                        )
                     
                     # 对所有列应用浮点数精度修复
                     for col in excel_df.columns:
@@ -609,8 +613,8 @@ with st.container(border=True):
                     excel_df = clean_excel_types(excel_df)
                     excel_cols = excel_df.columns.tolist()
 
-                    # 显示处理后的数据预览（最多显示20行）
-                    preview_df = excel_df.head(20)
+                    # 显示处理后的数据预览（最多显示PREVIEW_ROWS行）
+                    preview_df = excel_df.head(PREVIEW_ROWS)
                     st.dataframe(
                         preview_df,
                         width='stretch',
@@ -629,11 +633,11 @@ with st.container(border=True):
                 finally:
                     # 确保临时文件被删除，添加错误处理
                     try:
-                        if os.path.exists(excel_path):
+                        if 'excel_path' in locals() and os.path.exists(excel_path):
                             os.unlink(excel_path)
-                    except PermissionError:
-                        # 如果删除失败，记录警告但不中断程序
-                        st.warning("⚠️ 临时Excel文件正在被使用，将在稍后自动清理", icon="ℹ️")
+                    except Exception as e:
+                        # 记录警告但不中断程序
+                        st.warning(f"⚠️ 清理临时Excel文件失败：{str(e)}", icon="ℹ️")
 
             except Exception as e:
                 st.error(f"❌ Excel读取失败：{str(e)}", icon="❌")
@@ -778,7 +782,7 @@ with st.container(border=True):
             st.markdown("\n<div style='font-size: 14px;'><strong>当前规则：</strong></div>", unsafe_allow_html=True)
             
             # 创建固定高度的容器，添加滚动条
-            scrollable_container = st.container(height=300, border=True)
+            scrollable_container = st.container(height=WIDGET_HEIGHT, border=True)
             
             with scrollable_container:
                 # 规则列表表格
@@ -786,36 +790,18 @@ with st.container(border=True):
                     # 使用columns布局确保内容和按钮在同一行
                     col1, col2, col3, col4, col5 = st.columns([0.5, 3, 0.5, 3, 1], gap="small")
                     
-                    # 添加行悬停效果的CSS
-                    st.markdown("""
-                    <style>
-                        .rule-row-item {
-                            padding: 8px;
-                            border-radius: 4px;
-                            transition: background-color 0.2s;
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            height: 100%;
-                        }
-                        .rule-row-item:hover {
-                            background-color: #f0f2f6;
-                        }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    
                     # 显示规则内容
                     with col1:
-                        st.write(f"<div class='rule-row-item'>{idx+1}.</div>", unsafe_allow_html=True)
+                        st.write(f"<div class='data-row-item'>{idx+1}.</div>", unsafe_allow_html=True)
                     
                     with col2:
-                        st.write(f"<div class='rule-row-item'><strong>{old}</strong></div>", unsafe_allow_html=True)
+                        st.write(f"<div class='data-row-item'><strong>{old}</strong></div>", unsafe_allow_html=True)
                     
                     with col3:
-                        st.write(f"<div class='rule-row-item'>→</div>", unsafe_allow_html=True)
+                        st.write(f"<div class='data-row-item'>→</div>", unsafe_allow_html=True)
                     
                     with col4:
-                        st.write(f"<div class='rule-row-item'>{col}</div>", unsafe_allow_html=True)
+                        st.write(f"<div class='data-row-item'>{col}</div>", unsafe_allow_html=True)
                     
                     with col5:
                         # 直接删除按钮
@@ -995,8 +981,7 @@ if len(st.session_state.replaced_files) > 0:
         st.subheader("💾 第五步：下载结果")
         
         # 分页显示结果文件
-        page_size = 10
-        total_pages = (len(st.session_state.replaced_files) + page_size - 1) // page_size
+        total_pages = (len(st.session_state.replaced_files) + PAGE_SIZE - 1) // PAGE_SIZE
         
         # 页码选择
         col_page = st.columns([1])[0]
@@ -1010,8 +995,8 @@ if len(st.session_state.replaced_files) > 0:
             )
         
         # 计算当前页的文件范围
-        start_idx = (current_page - 1) * page_size
-        end_idx = min(start_idx + page_size, len(st.session_state.replaced_files))
+        start_idx = (current_page - 1) * PAGE_SIZE
+        end_idx = min(start_idx + PAGE_SIZE, len(st.session_state.replaced_files))
         current_files = st.session_state.replaced_files[start_idx:end_idx]
         
         # 显示当前页的文件
@@ -1045,26 +1030,8 @@ if len(st.session_state.replaced_files) > 0:
             # 使用columns布局确保文件名和下载按钮在同一行
             col_file, col_download = st.columns([3, 1], gap="small")
             
-            # 添加行悬停效果的CSS
-            st.markdown("""
-            <style>
-                .result-row-item {
-                    padding: 8px;
-                    border-radius: 4px;
-                    transition: background-color 0.2s;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    height: 100%;
-                }
-                .result-row-item:hover {
-                    background-color: #f0f2f6;
-                }
-            </style>
-            """, unsafe_allow_html=True)
-            
             with col_file:
-                st.write(f"<div class='result-row-item'>{idx}. {file.filename}</div>", unsafe_allow_html=True)
+                st.write(f"<div class='data-row-item'>{idx}. {file.filename}</div>", unsafe_allow_html=True)
             
             with col_download:
                 # 单个文件下载
