@@ -3,7 +3,7 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ main ]
-    tags: ['v0.0.1']  # 添加标签触发
+    tags: ['v*.*.*']  # 支持所有语义化版本标签
   pull_request:
     branches: [ main ]
 
