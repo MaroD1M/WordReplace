@@ -1,10 +1,4 @@
-"""
-Word+Excel批量替换工具 v1.5.4 最终版
-功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
-特性：规范的缓存管理、高性能预览、全面Bug修复
-"""
-
-# ==================== 导入库 ====================
+# 导入标准库
 import os
 import sys
 import tempfile
@@ -19,65 +13,43 @@ import unicodedata
 import copy
 from datetime import datetime
 import hashlib
+import base64
 
-# 数据处理库
+# 导入第三方库
 import streamlit as st
 import pandas as pd
-
-# Word处理库
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-
-# 数据结构和类型提示
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple, Set
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 
-# ==================== 配置和常量 ====================
+# 项目版本信息
+VERSION = "v1.5.0"
 
-VERSION = "v1.5.4"
-
-# 页面配置常量
+# 配置常量
 PAGE_SIZE = 10
 WIDGET_HEIGHT = 250
-PREVIEW_ROWS = 50
+PREVIEW_ROWS = 20
 MAX_FILENAME_LENGTH = 200
 MAX_WORD_FILE_SIZE = 50 * 1024 * 1024
 MAX_EXCEL_FILE_SIZE = 50 * 1024 * 1024
+CACHE_DIR = ".replace_cache"
+HISTORY_FILE = ".replace_history.json"
 MAX_HISTORY_ITEMS = 30
 
-# ===== 缓存目录管理 =====
-# 获取用户的本地缓存目录（跨平台兼容）
-if os.name == 'nt':  # Windows
-    CACHE_BASE_DIR = os.path.join(os.environ.get('APPDATA', ''), 'BatchReplacer')
-else:  # Linux/Mac
-    CACHE_BASE_DIR = os.path.expanduser('~/.cache/batch_replacer')
-
-# 创建缓存子目录
-CACHE_RULES_DIR = os.path.join(CACHE_BASE_DIR, 'rules')  # 规则缓存目录
-CACHE_HISTORY_DIR = os.path.join(CACHE_BASE_DIR, 'history')  # 历史记录目录
-CACHE_TEMP_DIR = os.path.join(CACHE_BASE_DIR, 'temp')  # 临时文件目录
-
-# 历史记录文件（放在缓存目录）
-HISTORY_FILE = os.path.join(CACHE_HISTORY_DIR, 'operation_history.json')
-
-# 规范化缓存目录结构
-for directory in [CACHE_BASE_DIR, CACHE_RULES_DIR, CACHE_HISTORY_DIR, CACHE_TEMP_DIR]:
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
-
-# 过滤警告消息
+# 过滤警告
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# 环境变量配置
+# 环境变量
 os.environ["STREAMLIT_VERSION"] = "1.51.0"
 os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 
-# ==================== Streamlit页面配置 ====================
+# 设置页面配置
 st.set_page_config(
     page_title="Word+Excel批量替换工具",
     page_icon="📋",
@@ -85,10 +57,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==================== 全局样式 ====================
+# 全局样式优化 - 紧凑布局
 st.markdown("""
 <style>
-    /* ===== 全局间距优化 ===== */
+    /* 全局间距优化 */
     .main {
         padding: 0.5rem 1rem !important;
     }
@@ -115,7 +87,7 @@ st.markdown("""
         gap: 0.5rem !important;
     }
 
-    /* ===== 按钮样式 ===== */
+    /* 按钮紧凑 */
     .stButton > button {
         border-radius: 5px;
         font-weight: 500;
@@ -129,7 +101,7 @@ st.markdown("""
         box-shadow: 0 2px 8px rgba(0,0,0,0.12);
     }
 
-    /* ===== 输入框样式 ===== */
+    /* 输入框紧凑 */
     .stTextInput, .stTextArea, .stSelectbox, .stNumberInput {
         margin-bottom: 0.3rem !important;
     }
@@ -144,12 +116,11 @@ st.markdown("""
         padding: 0.5rem !important;
     }
 
-    /* ===== 标题和文字样式 ===== */
+    /* 标题紧凑 */
     h1 {
         padding-bottom: 0.5rem;
         border-bottom: 2px solid #1f77b4;
         margin-bottom: 0.5rem;
-        line-height: 1.2;
     }
 
     h2 {
@@ -173,13 +144,13 @@ st.markdown("""
         font-size: 1.1rem !important;
     }
 
-    /* ===== 展开器样式 ===== */
+    /* 展开器紧凑 */
     .streamlit-expander {
         margin-bottom: 0.3rem !important;
         border-radius: 5px;
     }
 
-    /* ===== 标签页样式 ===== */
+    /* 标签页紧凑 */
     .stTabs [data-baseweb="tab-list"] {
         gap: 1px;
         margin-bottom: 0.5rem;
@@ -192,14 +163,14 @@ st.markdown("""
         font-size: 13px;
     }
 
-    /* ===== 数据框样式 ===== */
+    /* 数据框紧凑 */
     div[data-testid="stDataFrame"] {
         border-radius: 5px;
         border: 1px solid #e0e0e0;
         font-size: 12px;
     }
 
-    /* ===== 指标卡样式 ===== */
+    /* 指标卡紧凑 */
     .metric-container {
         background-color: #f8f9fa;
         padding: 0.5rem !important;
@@ -208,7 +179,7 @@ st.markdown("""
         margin-bottom: 0.3rem;
     }
 
-    /* ===== 信息框样式 ===== */
+    /* 信息框紧凑 */
     .stats-box, .success-box, .warning-box, .error-box {
         padding: 0.6rem !important;
         margin: 0.3rem 0 !important;
@@ -237,14 +208,14 @@ st.markdown("""
         border-left-color: #ef4444;
     }
 
-    /* ===== 分隔线 ===== */
+    /* 分隔线 */
     hr {
         margin: 0.5rem 0 !important;
         border: none;
         border-top: 1px solid #e0e0e0;
     }
 
-    /* ===== 无线电和复选框样式 ===== */
+    /* 无线电和复选框紧凑 */
     .stRadio, .stCheckbox {
         margin-bottom: 0.2rem !important;
     }
@@ -254,17 +225,17 @@ st.markdown("""
         font-size: 13px;
     }
 
-    /* ===== 文件上传器样式 ===== */
+    /* 文件上传器紧凑 */
     .stFileUploader {
         margin-bottom: 0.3rem !important;
     }
 
-    /* ===== 进度条样式 ===== */
+    /* 进度条 */
     .stProgress {
         margin-bottom: 0.3rem !important;
     }
 
-    /* ===== 表格样式 ===== */
+    /* 表格紧凑 */
     table {
         font-size: 12px !important;
     }
@@ -273,74 +244,7 @@ st.markdown("""
         padding: 0.4rem !important;
     }
 
-    /* ===== 悬浮提示样式 ===== */
-    .help-icon {
-        display: inline-block;
-        margin-left: 6px;
-        color: #0ea5e9;
-        font-weight: bold;
-        cursor: help;
-        position: relative;
-    }
-
-    .help-icon:hover {
-        color: #0284c7;
-    }
-
-    /* 工具提示样式 */
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        cursor: help;
-    }
-
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 220px;
-        background-color: #1f2937;
-        color: #fff;
-        text-align: left;
-        border-radius: 6px;
-        padding: 10px;
-        position: absolute;
-        z-index: 1000;
-        bottom: 125%;
-        left: 50%;
-        margin-left: -110px;
-        opacity: 0;
-        transition: opacity 0.3s;
-        font-size: 12px;
-        line-height: 1.5;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        border: 1px solid #374151;
-    }
-
-    .tooltip .tooltiptext::after {
-        content: "";
-        position: absolute;
-        top: 100%;
-        left: 50%;
-        margin-left: -5px;
-        border-width: 5px;
-        border-style: solid;
-        border-color: #1f2937 transparent transparent transparent;
-    }
-
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
-    }
-
-    /* Excel预览滚动容器 */
-    .excel-preview-container {
-        height: 350px;
-        overflow-y: auto;
-        border: 1px solid #e0e0e0;
-        border-radius: 6px;
-        background-color: #f9f9f9;
-    }
-
-    /* 响应式设计 */
+    /* 响应式 */
     @media (max-width: 768px) {
         .main {
             padding: 0.3rem 0.5rem;
@@ -348,133 +252,12 @@ st.markdown("""
         .stContainer {
             padding: 0.5rem;
         }
-        .tooltip .tooltiptext {
-            width: 180px;
-            margin-left: -90px;
-        }
     }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== 帮助提示文本定义 ====================
 
-HELP_TEXTS = {
-    "word_upload": "上传包含要替换内容的Word文件(.docx格式，不支持.doc)",
-    "excel_upload": "上传包含替换数据的Excel文件(.xlsx或.xls格式)",
-    "replace_scope": "选择替换模式：完整关键词直接替换，括号内容只替换括号里的文字",
-    "file_name_col": "选择Excel中的列用于生成文件名，通常选择唯一标识符列",
-    "start_row": "从第几行开始处理替换",
-    "end_row": "处理到第几行（包括该行），默认到最后一行",
-    "file_prefix": "为生成的文件名添加前缀，如'2024-'会生成'2024-文件名.docx'",
-    "new_keyword": "从Word预览中复制要替换的关键字，如【姓名】、（部门）",
-    "new_column": "选择Excel中对应的列，这一列的数据会替换关键字",
-    "add_rule": "点击添加规则，规则添加成功后即可开始替换",
-    "start_replace": "开始执行批量替换操作，需要：1.选择文件 2.添加规则 3.设置行范围",
-    "export_zip": "将所有替换后的文件保存为一个ZIP压缩包，便于统一下载",
-    "export_merge": "将所有替换后的文件合并为一个Word文档，每个文件占一页",
-    "export_stats": "导出替换统计数据为CSV格式，包含文件名、行号、替换次数等",
-    "export_log": "导出详细的替换操作日志为TXT文件，记录每一行的替换情况",
-    "rule_list": "显示已添加的所有替换规则，可以删除不需要的规则或撤销操作",
-    "rule_import": "从之前导出的JSON文件中导入替换规则",
-    "rule_export": "将当前规则导出为JSON文件，可以在其他电脑导入使用",
-    "rule_cache": "快速保存规则到本地缓存，下次可以快速加载使用",
-    "undo": "撤销最后一次规则操作（添加、删除等）",
-    "clear_rules": "清空所有已添加的替换规则",
-    "single_download": "下载单个文件到本地",
-    "single_log": "查看该文件的详细替换日志",
-}
-
-
-# ==================== 帮助提示组件 ====================
-
-def create_tooltip(text: str, help_key: str = "") -> str:
-    """
-    创建带有悬浮提示的HTML组件
-
-    Args:
-        text: 显示的标签文本
-        help_key: 帮助文本的键
-
-    Returns:
-        HTML字符串
-    """
-    help_text = HELP_TEXTS.get(help_key, "")
-    if not help_text:
-        return text
-
-    # 清理帮助文本中的引号，避免HTML冲突
-    help_text = help_text.replace('"', '&quot;').replace("'", "&#39;")
-
-    html = f"""
-    <span class="tooltip" style="display: inline-flex; align-items: center; gap: 4px;">
-        <span>{text}</span>
-        <span class="help-icon" title="点击查看帮助">ℹ️</span>
-        <span class="tooltiptext">{help_text}</span>
-    </span>
-    """
-    return html
-
-
-def format_file_size(size_bytes: int) -> str:
-    """
-    格式化文件大小为可读的字符串
-
-    Args:
-        size_bytes: 文件大小（字节）
-
-    Returns:
-        格式化后的文件大小字符串（如 1.23MB）
-    """
-    if size_bytes == 0:
-        return "0B"
-
-    size_names = ("B", "KB", "MB", "GB")
-    i = int(0)
-    while size_bytes >= 1024 and i < len(size_names) - 1:
-        size_bytes /= 1024.0
-        i += 1
-
-    return f"{size_bytes:.2f}{size_names[i]}"
-
-
-def get_cache_info() -> Dict:
-    """
-    获取缓存目录信息（包括大小和文件数）
-
-    Returns:
-        缓存信息字典
-    """
-    info = {
-        "rules_count": 0,
-        "history_count": 0,
-        "total_size": 0,
-        "rules_dir": CACHE_RULES_DIR,
-        "history_file": HISTORY_FILE,
-    }
-
-    # 统计规则缓存
-    try:
-        if os.path.exists(CACHE_RULES_DIR):
-            files = [f for f in os.listdir(CACHE_RULES_DIR) if f.endswith('.json')]
-            info["rules_count"] = len(files)
-            for f in files:
-                file_path = os.path.join(CACHE_RULES_DIR, f)
-                info["total_size"] += os.path.getsize(file_path)
-    except:
-        pass
-
-    # 统计历史记录
-    try:
-        if os.path.exists(HISTORY_FILE):
-            info["history_count"] = 1
-            info["total_size"] += os.path.getsize(HISTORY_FILE)
-    except:
-        pass
-
-    return info
-
-
-# ==================== 数据结构定义 ====================
+# ---------------------- 数据结构与初始化 ----------------------
 
 @dataclass
 class ReplacedFile:
@@ -497,74 +280,28 @@ class HistoryRecord:
     status: str
 
 
-# ==================== 缓存管理器 ====================
-
 class CacheManager:
-    """
-    管理替换规则的缓存
-
-    缓存文件结构：
-    ~/.cache/batch_replacer/
-    ├── rules/                    # 规则缓存目录
-    │   ├── rule_20240115_1430.json
-    │   ├── rule_20240115_1435.json
-    │   └── ...
-    ├── history/                  # 历史记录目录
-    │   └── operation_history.json
-    └── temp/                      # 临时文件目录
-    """
+    """缓存管理器"""
 
     def __init__(self):
-        """初始化缓存管理器，确保缓存目录存在"""
-        self.rules_dir = CACHE_RULES_DIR
-        self.history_dir = CACHE_HISTORY_DIR
-        self.temp_dir = CACHE_TEMP_DIR
+        self.cache_dir = CACHE_DIR
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
 
-        # 确保目录存在
-        for directory in [self.rules_dir, self.history_dir, self.temp_dir]:
-            if not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-
-    def save_rules(self, rules: List[Tuple[str, str]], filename: str = None) -> bool:
-        """
-        保存规则到缓存文件
-
-        Args:
-            rules: 规则列表
-            filename: 自定义文件名（不包含扩展名）。如果为None，使用时间戳
-
-        Returns:
-            是否保存成功
-        """
+    def save_rules(self, rules: List[Tuple[str, str]], filename: str):
+        """保存规则到缓存"""
         try:
-            # 生成规范的文件名
-            if filename is None:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"rule_{timestamp}"
-
             rules_data = [{"keyword": old, "excel_column": col} for old, col in rules]
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-
+            cache_file = os.path.join(self.cache_dir, f"{filename}.json")
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(rules_data, f, ensure_ascii=False, indent=2)
-
-            return True
         except Exception as e:
-            st.warning(f"⚠️ 保存规则缓存失败：{str(e)[:50]}", icon="⚠️")
-            return False
+            st.warning(f"⚠️ 保存缓存失败", icon="⚠️")
 
     def load_rules(self, filename: str) -> List[Tuple[str, str]]:
-        """
-        从缓存文件加载规则
-
-        Args:
-            filename: 缓存文件名（不包含扩展名）
-
-        Returns:
-            规则列表
-        """
+        """加载缓存的规则"""
         try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.cache_dir, f"{filename}.json")
             if os.path.exists(cache_file):
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     rules_data = json.load(f)
@@ -574,107 +311,24 @@ class CacheManager:
         return []
 
     def get_cached_rules_list(self) -> List[str]:
-        """
-        获取所有缓存的规则文件列表（按时间降序排列）
-
-        Returns:
-            规则文件名列表（最近30个）
-        """
+        """获取所有缓存的规则文件"""
         try:
-            if os.path.exists(self.rules_dir):
-                files = [f.replace('.json', '') for f in os.listdir(self.rules_dir) if f.endswith('.json')]
-                # 按修改时间降序排列
-                files_with_time = []
-                for f in files:
-                    full_path = os.path.join(self.rules_dir, f"{f}.json")
-                    mtime = os.path.getmtime(full_path)
-                    files_with_time.append((f, mtime))
-
-                files_with_time.sort(key=lambda x: x[1], reverse=True)
-                return [f[0] for f in files_with_time[:30]]
+            if os.path.exists(self.cache_dir):
+                files = [f.replace('.json', '') for f in os.listdir(self.cache_dir) if f.endswith('.json')]
+                return sorted(files, reverse=True)[:10]  # 只返回最近10个
         except:
             pass
         return []
 
-    def delete_rule(self, filename: str) -> bool:
-        """
-        删除缓存的规则文件
-
-        Args:
-            filename: 规则文件名（不包含扩展名）
-
-        Returns:
-            是否删除成功
-        """
-        try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-            if os.path.exists(cache_file):
-                os.remove(cache_file)
-                return True
-        except:
-            pass
-        return False
-
-    def get_rule_info(self, filename: str) -> Dict:
-        """
-        获取规则文件信息
-
-        Args:
-            filename: 规则文件名（不包含扩展名）
-
-        Returns:
-            规则文件信息字典（创建时间、大小、规则数）
-        """
-        try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-            if os.path.exists(cache_file):
-                stat = os.stat(cache_file)
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    rules_data = json.load(f)
-
-                return {
-                    "filename": filename,
-                    "size": format_file_size(stat.st_size),
-                    "rules_count": len(rules_data),
-                    "mtime": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                }
-        except:
-            pass
-        return None
-
-    def clear_all_cache(self) -> bool:
-        """
-        清除所有缓存文件
-
-        Returns:
-            是否清除成功
-        """
-        try:
-            for directory in [self.rules_dir, self.history_dir, self.temp_dir]:
-                if os.path.exists(directory):
-                    for file in os.listdir(directory):
-                        file_path = os.path.join(directory, file)
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-            return True
-        except:
-            pass
-        return False
-
-
-# ==================== 历史记录管理器 ====================
 
 class HistoryManager:
-    """管理操作历史记录（保存到缓存目录）"""
+    """历史记录管理器"""
 
     def __init__(self):
-        """初始化历史记录管理器"""
         self.history_file = HISTORY_FILE
-        # 确保目录存在
-        os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
 
     def add_record(self, record: HistoryRecord):
-        """添加操作记录到历史"""
+        """添加历史记录"""
         try:
             history = self.load_history()
             history.insert(0, {
@@ -692,7 +346,7 @@ class HistoryManager:
             pass
 
     def load_history(self) -> List[Dict]:
-        """加载所有历史记录"""
+        """加载历史记录"""
         try:
             if os.path.exists(self.history_file):
                 with open(self.history_file, 'r', encoding='utf-8') as f:
@@ -702,7 +356,7 @@ class HistoryManager:
         return []
 
     def clear_history(self):
-        """清除所有历史记录"""
+        """清除历史记录"""
         try:
             if os.path.exists(self.history_file):
                 os.remove(self.history_file)
@@ -711,10 +365,8 @@ class HistoryManager:
             pass
 
 
-# ==================== 会话状态初始化 ====================
-
 def init_session_state():
-    """初始化Streamlit会话状态"""
+    """初始化会话状态"""
     required_states = {
         "replace_rules": [],
         "replaced_files": [],
@@ -726,7 +378,6 @@ def init_session_state():
         "undo_stack": [],
         "rule_filter": "",
         "show_advanced": False,
-        "excel_cache": None,
     }
 
     for key, default in required_states.items():
@@ -737,10 +388,10 @@ def init_session_state():
 init_session_state()
 
 
-# ==================== 核心工具函数 ====================
+# ---------------------- 核心工具函数 ----------------------
 
 def clean_text(text: str) -> str:
-    """清理文本：去除首尾空白、隐藏字符、特殊空格，统一格式"""
+    """清理文本"""
     if not isinstance(text, str):
         return ""
     text = text.strip()
@@ -751,7 +402,7 @@ def clean_text(text: str) -> str:
 
 
 def clean_filename(filename: str) -> str:
-    """清理文件名中的非法字符"""
+    """清理文件名非法字符"""
     return re.sub(r'[\\/:*?"<>|]', "_", str(filename))
 
 
@@ -763,7 +414,7 @@ def generate_safe_filename(
         row_idx: int = 0,
         max_length: int = MAX_FILENAME_LENGTH
 ) -> str:
-    """安全生成文件名，处理超长名称和特殊字符"""
+    """安全生成文件名"""
     try:
         if file_name_col and file_name_col in excel_row.index:
             base_name = clean_text(str(excel_row[file_name_col]))
@@ -811,7 +462,7 @@ def precompute_replace_patterns(
         replace_rules: List[Tuple[str, str]],
         excel_row: pd.Series
 ) -> List[Tuple[str, str, str, str]]:
-    """预计算所有需要替换的模式"""
+    """预计算替换模式"""
     replace_patterns = []
 
     for old_text, col_name in replace_rules:
@@ -851,7 +502,7 @@ def process_paragraph(
         replace_patterns: List[Tuple[str, str, str, str]],
         cleaned_para: str = None
 ) -> Dict:
-    """处理单个段落的关键字替换"""
+    """处理段落替换"""
     para_text = paragraph.text
     if cleaned_para is None:
         cleaned_para = clean_text(para_text)
@@ -889,7 +540,7 @@ def replace_word_with_format(
         excel_row: pd.Series,
         replace_rules: List[Tuple[str, str]]
 ) -> Tuple[io.BytesIO, str, int]:
-    """替换Word文件中的关键字，保留格式"""
+    """替换Word文件"""
     replace_count = defaultdict(int)
     total_replace = 0
 
@@ -944,7 +595,7 @@ def replace_word_with_format(
 def merge_word_documents(
         replaced_files: List[ReplacedFile]
 ) -> io.BytesIO:
-    """合并多个Word文档（保留所有格式和结构）"""
+    """合并Word文档"""
     if not replaced_files:
         raise ValueError("没有文件")
 
@@ -996,7 +647,7 @@ def get_replace_params(
         file_prefix: str,
         file_suffix: str
 ) -> Dict:
-    """获取替换参数，用于判断是否需要重新替换"""
+    """获取替换参数"""
     return {
         "word_filename": word_file.name if word_file else "",
         "excel_rows": len(excel_df) if excel_df is not None else 0,
@@ -1008,8 +659,59 @@ def get_replace_params(
     }
 
 
+def fix_float_precision(x: str, column_name: Optional[str] = None) -> str:
+    """修复浮点数精度"""
+    if not x or not isinstance(x, str):
+        return x
+
+    x = x.strip()
+    if not x:
+        return ""
+
+    try:
+        if x.replace('.', '', 1).replace('-', '', 1).isdigit():
+            pass
+        else:
+            return x
+    except:
+        return x
+
+    float_pattern = r'^\s*[-+]?\d*\.?\d+\s*$'
+    if not re.match(float_pattern, x):
+        return x
+
+    try:
+        dec_value = Decimal(x)
+
+        if dec_value.as_tuple().exponent >= 0:
+            return str(int(dec_value))
+
+        float_val = float(dec_value)
+        float_str = str(float_val)
+
+        if '999999' in float_str or '000000' in float_str:
+            if '.' in x:
+                orig_dec_part = x.split('.')[1]
+                orig_dec_places = len(orig_dec_part.rstrip('0'))
+
+                if orig_dec_places > 0:
+                    try:
+                        quantized = dec_value.quantize(
+                            Decimal('1.' + '0' * orig_dec_places),
+                            rounding=ROUND_HALF_UP
+                        )
+                        result = format(quantized, f'.{orig_dec_places}f')
+                        return result.rstrip('0').rstrip('.')
+                    except:
+                        pass
+
+        return x
+    except:
+        return x
+
+
 def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
-    """清理Excel数据类型，避免混合类型导致的问题"""
+    """清理Excel数据类型"""
     df_clean = df.copy()
 
     for col in df_clean.columns:
@@ -1021,6 +723,7 @@ def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
 
             df_clean[col] = df_clean[col].fillna("")
             df_clean[col] = df_clean[col].astype(str).str.strip()
+            df_clean[col] = df_clean[col].apply(lambda x: fix_float_precision(x, col))
 
         except:
             try:
@@ -1032,12 +735,12 @@ def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_file_hash(file_data: bytes) -> str:
-    """获取文件哈希值（用于验证文件完整性）"""
+    """获取文件哈希值"""
     return hashlib.md5(file_data).hexdigest()[:6]
 
 
 def export_statistics_to_csv(replaced_files: List[ReplacedFile]) -> str:
-    """导出替换统计数据到CSV格式"""
+    """导出统计数据到CSV"""
     try:
         data = []
         for idx, file in enumerate(replaced_files, 1):
@@ -1075,11 +778,11 @@ def get_keyword_statistics(replace_rules: List[Tuple[str, str]],
     return stats
 
 
-# ==================== 创建管理器实例 ====================
+# 创建管理器
 cache_manager = CacheManager()
 history_manager = HistoryManager()
 
-# ==================== 侧栏 ====================
+# ===================== 侧栏 =====================
 with st.sidebar:
     st.title("📚 快速导航")
 
@@ -1093,64 +796,21 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # 缓存信息显示
-    cache_info = get_cache_info()
-    with st.expander("💾 缓存信息", expanded=False):
-        col_info1, col_info2 = st.columns(2)
-        with col_info1:
-            st.caption(f"**规则缓存**: {cache_info['rules_count']} 个")
-        with col_info2:
-            st.caption(f"**总大小**: {format_file_size(cache_info['total_size'])}")
-
-        st.caption(f"📂 位置: {cache_info['rules_dir']}")
-
-        # 清除缓存按钮
-        if st.button("🗑️ 清除所有缓存", key="clear_cache_all", use_container_width=True):
-            if cache_manager.clear_all_cache():
-                st.success("✅ 缓存已清除", icon="✅")
-                st.rerun()
-
-    st.markdown("---")
-
     # 快速功能
     st.subheader("⚡ 快速功能")
 
-    # 快速加载缓存规则
     cached = cache_manager.get_cached_rules_list()
     if cached:
-        st.markdown("**📂 加载规则缓存**")
-        selected = st.selectbox(
-            "选择规则",
-            options=["选择..."] + cached,
-            key="sidebar_cache",
-            label_visibility="collapsed"
-        )
-
+        selected = st.selectbox("📂 加载规则", ["选择..."] + cached, key="sidebar_cache")
         if selected and selected != "选择...":
-            # 显示规则信息
-            rule_info = cache_manager.get_rule_info(selected)
-            if rule_info:
-                st.caption(f"📋 {rule_info['rules_count']} 个规则 | 📅 {rule_info['mtime']}")
+            if st.button("✅ 加载", key="sidebar_load", use_container_width=True):
+                loaded = cache_manager.load_rules(selected)
+                if loaded:
+                    st.session_state.replace_rules = loaded
+                    st.success(f"✅ 加载{len(loaded)}条", icon="✅")
+                    st.rerun()
 
-            col_load, col_del = st.columns(2, gap="small")
-            with col_load:
-                if st.button("✅ 加载", key="sidebar_load", use_container_width=True):
-                    loaded = cache_manager.load_rules(selected)
-                    if loaded:
-                        st.session_state.replace_rules = loaded
-                        st.success(f"✅ 加载{len(loaded)}条规则", icon="✅")
-                        st.rerun()
-            with col_del:
-                if st.button("🗑️ 删除", key="sidebar_del_cache", use_container_width=True):
-                    if cache_manager.delete_rule(selected):
-                        st.success("✅ 规则已删除", icon="✅")
-                        st.rerun()
-    else:
-        st.info("📁 暂无缓存规则", icon="ℹ️")
-
-    st.markdown("---")
-
-    # 历史记录显示
+    # 历史记录
     history = history_manager.load_history()
     if history:
         st.subheader("📜 最近操作")
@@ -1160,30 +820,24 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # 工具操作
+    # 工具
     st.subheader("🔧 工具")
 
-    if st.button("🗑️ 清空当前规则", key="sidebar_clear", use_container_width=True):
+    if st.button("🗑️ 清空所有", key="sidebar_clear", use_container_width=True):
         st.session_state.replace_rules = []
         st.session_state.replaced_files = []
         st.success("✅ 已清空", icon="✅")
         st.rerun()
 
     if history:
-        if st.button("📜 清除历史记录", key="sidebar_clear_hist", use_container_width=True):
+        if st.button("📜 清除历史", key="sidebar_clear_hist", use_container_width=True):
             history_manager.clear_history()
             st.rerun()
 
-# ==================== 主页面 - 标题 ====================
-col_title1, col_title2 = st.columns([8, 2])
-with col_title1:
-    st.title("📋 Word+Excel批量替换工具")
-with col_title2:
-    st.markdown(
-        f"<div style='text-align: right; padding-top: 5px;'><small style='color: #999;'>v{VERSION}</small></div>",
-        unsafe_allow_html=True)
+# ===================== 主页面 =====================
+st.title("📋 Word+Excel批量替换工具")
 
-# 进度显示
+# 进度显示（如果有替换任务）
 if st.session_state.replaced_files and st.session_state.replace_params:
     progress_col, status_col = st.columns([3, 1])
     with progress_col:
@@ -1203,103 +857,83 @@ col_main_left, col_main_right = st.columns([2, 1], gap="medium")
 with col_main_left:
     st.subheader("📤 文件上传")
 
-    # 上传区域
+    # 上传区域 - 两列并排
     col_upload1, col_upload2 = st.columns(2, gap="small")
 
     with col_upload1:
-        st.markdown(create_tooltip("**Word模板**", "word_upload"), unsafe_allow_html=True)
-
+        st.markdown("**Word**")
         word_file = st.file_uploader(
             "选择文件",
             type=["docx"],
             key="word",
             label_visibility="collapsed",
-            help="仅支持.docx格式"
+            help="仅支持.docx"
         )
         if word_file:
-            file_size_bytes = len(word_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
-
-            if file_size_bytes > MAX_WORD_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+            file_size_mb = len(word_file.getvalue()) / 1024 / 1024
+            if file_size_mb > MAX_WORD_FILE_SIZE / 1024 / 1024:
+                st.error(f"❌ 过大", icon="❌")
                 word_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.caption(f"✅ {file_size_mb:.1f}MB")
 
     with col_upload2:
-        st.markdown(create_tooltip("**Excel数据**", "excel_upload"), unsafe_allow_html=True)
-
+        st.markdown("**Excel**")
         excel_file = st.file_uploader(
             "选择文件",
             type=["xlsx", "xls"],
             key="excel",
             label_visibility="collapsed",
-            help="支持.xlsx/.xls格式"
+            help="支持.xlsx/.xls"
         )
         if excel_file:
-            file_size_bytes = len(excel_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
-
-            if file_size_bytes > MAX_EXCEL_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+            file_size_mb = len(excel_file.getvalue()) / 1024 / 1024
+            if file_size_mb > MAX_EXCEL_FILE_SIZE / 1024 / 1024:
+                st.error(f"❌ 过大", icon="❌")
                 excel_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.caption(f"✅ {file_size_mb:.1f}MB")
 
     st.markdown("---")
 
-    # 文件预览
-    with st.expander("👀 文件预览 - 点击查看/复制内容", expanded=False):
+    # 文件预览 - 可折叠
+    with st.expander("👀 文件预览", expanded=True):
         col_prev1, col_prev2 = st.columns(2, gap="small")
 
         excel_df = None
         excel_cols = []
 
         with col_prev1:
-            st.markdown("**Word文档内容**")
+            st.markdown("**Word内容**")
             if word_file:
                 try:
                     doc = Document(io.BytesIO(word_file.getvalue()))
+                    preview_text = ""
+                    para_count = 0
 
-                    html_content = ""
+                    for paragraph in doc.paragraphs:
+                        if para_count >= 10:
+                            preview_text += "\n... (内容已截断)"
+                            break
+                        if paragraph.text.strip():
+                            preview_text += paragraph.text[:50] + "\n"
+                            para_count += 1
 
-                    for para in doc.paragraphs[:15]:
-                        if para.text.strip():
-                            text = para.text.replace("<", "&lt;").replace(">", "&gt;")
-                            html_content += f"<p style='margin: 4px 0; word-break: break-all;'>{text}</p>"
-
-                    for table_idx, table in enumerate(doc.tables[:2]):
-                        html_content += f"<p style='margin-top: 8px; font-weight: bold; color: #1f77b4;'>📊 表格{table_idx + 1}：</p>"
-                        html_content += "<table style='border-collapse: collapse; width: 100%; font-size: 12px;'>"
-
-                        for row_idx, row in enumerate(table.rows[:10]):
-                            html_content += "<tr>"
-                            for cell in row.cells:
-                                cell_text = cell.text.replace("<", "&lt;").replace(">", "&gt;")[:30]
-                                html_content += f"<td style='border: 1px solid #ccc; padding: 4px;'>{cell_text}</td>"
-                            html_content += "</tr>"
-
-                        html_content += "</table>"
-
-                    st.components.v1.html(f"""
-                    <div style='height: 280px; overflow-y: auto; padding: 12px; border: 1px solid #e0e0e0; 
-                                border-radius: 6px; font-size: 13px; line-height: 1.6; background-color: #f9f9f9;
-                                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; word-wrap: break-word;
-                                user-select: text;'>
-                        {html_content}
-                    </div>
-                    """, height=300)
-
+                    st.text_area(
+                        "预览",
+                        value=preview_text[:500] if preview_text else "空文档",
+                        height=120,
+                        disabled=True,
+                        label_visibility="collapsed"
+                    )
                     st.caption(f"📄 {len(doc.paragraphs)}段落，{len(doc.tables)}表格")
-                    st.info("💡 可以在上方选中内容按Ctrl+C复制，粘贴到下方关键字输入框中", icon="ℹ️")
-
-                except Exception as e:
-                    st.error(f"❌ 预览失败", icon="❌")
+                except:
+                    st.warning("❌ 预览失败", icon="⚠️")
             else:
                 st.info("请上传Word文件", icon="ℹ️")
 
         with col_prev2:
-            st.markdown("**Excel数据预览**")
+            st.markdown("**Excel内容**")
             if excel_file:
                 try:
                     with NamedTemporaryFile(delete=False, suffix='.xlsx') as temp_excel:
@@ -1325,13 +959,13 @@ with col_main_left:
                                 excel_df = clean_excel_types(excel_df)
                                 excel_cols = excel_df.columns.tolist()
 
-                                preview_df = excel_df.head(PREVIEW_ROWS)
-
+                                # 显示摘要
+                                preview_df = excel_df.head(5)
                                 st.dataframe(
                                     preview_df,
                                     use_container_width=True,
                                     hide_index=True,
-                                    height=280
+                                    height=120
                                 )
 
                                 col_s1, col_s2 = st.columns(2)
@@ -1347,7 +981,7 @@ with col_main_left:
                             pass
 
                 except Exception as e:
-                    st.error(f"❌ 读取失败", icon="❌")
+                    st.warning("❌ 读取失败", icon="⚠️")
             else:
                 st.info("请上传Excel文件", icon="ℹ️")
 
@@ -1355,9 +989,8 @@ with col_main_left:
 with col_main_right:
     st.subheader("📋 规则管理")
 
-    # 替换范围
-    st.markdown(create_tooltip("**替换范围**", "replace_scope"), unsafe_allow_html=True)
-
+    # 替换范围 - 紧凑显示
+    st.markdown("**替换范围**")
     replace_scope = st.radio(
         "模式",
         options=["完整关键词", "括号内容"],
@@ -1370,12 +1003,12 @@ with col_main_right:
 
     st.markdown("---")
 
-    # 规则列表
-    st.markdown(create_tooltip(f"**规则列表** ({len(st.session_state.replace_rules)})", "rule_list"),
-                unsafe_allow_html=True)
+    # 规则列表 - 紧凑显示
+    st.markdown(f"**规则列表** ({len(st.session_state.replace_rules)})")
 
     if st.session_state.replace_rules:
-        with st.container(border=True):
+        # 规则快速显示
+        with st.container(height=200, border=True):
             for idx, (old, col) in enumerate(st.session_state.replace_rules):
                 col_del, col_rule = st.columns([0.5, 3], gap="small")
                 with col_del:
@@ -1386,18 +1019,18 @@ with col_main_right:
                         st.session_state.replaced_files = []
                         st.rerun()
                 with col_rule:
-                    st.caption(f"**{old[:12]}** → {col[:12]}")
+                    st.caption(f"**{old[:15]}** → {col[:15]}")
 
         # 规则操作按钮
         col_undo, col_clear = st.columns(2, gap="small")
         with col_undo:
             if st.session_state.undo_stack:
-                if st.button("↶ 撤销", key="undo", use_container_width=True, help=HELP_TEXTS["undo"]):
+                if st.button("↶ 撤销", key="undo", use_container_width=True):
                     st.session_state.replace_rules = st.session_state.undo_stack.pop()
                     st.success("✅ 已撤销", icon="✅")
                     st.rerun()
         with col_clear:
-            if st.button("🗑️ 清空", key="clear_rules", use_container_width=True, help=HELP_TEXTS["clear_rules"]):
+            if st.button("🗑️ 清空", key="clear_rules", use_container_width=True):
                 st.session_state.undo_stack.append(st.session_state.replace_rules.copy())
                 st.session_state.replace_rules.clear()
                 st.session_state.replaced_files = []
@@ -1407,15 +1040,13 @@ with col_main_right:
 
     st.markdown("---")
 
-    # 添加规则
-    st.markdown(create_tooltip("**新增规则**", "add_rule"), unsafe_allow_html=True)
-
+    # 添加规则 - 紧凑
+    st.markdown("**新增规则**")
     new_keyword = st.text_input(
         "关键字",
         placeholder="如：【姓名】",
         key="new_keyword",
-        label_visibility="collapsed",
-        help=HELP_TEXTS["new_keyword"]
+        label_visibility="collapsed"
     )
 
     if excel_cols:
@@ -1423,8 +1054,7 @@ with col_main_right:
             "列",
             options=excel_cols,
             key="new_column",
-            label_visibility="collapsed",
-            help=HELP_TEXTS["new_column"]
+            label_visibility="collapsed"
         )
     else:
         new_column = None
@@ -1434,12 +1064,11 @@ with col_main_right:
             key="add_rule",
             type="primary",
             disabled=not (new_keyword and new_column),
-            use_container_width=True,
-            help=HELP_TEXTS["add_rule"]
+            use_container_width=True
     ):
         rule = (new_keyword.strip(), new_column)
         if rule in st.session_state.replace_rules:
-            st.warning("⚠️ 规则已存在", icon="⚠️")
+            st.warning("⚠️ 已存在", icon="⚠️")
         else:
             st.session_state.undo_stack.append(st.session_state.replace_rules.copy())
             st.session_state.replace_rules.append(rule)
@@ -1448,15 +1077,14 @@ with col_main_right:
 
     st.markdown("---")
 
-    # 规则导入导出
+    # 规则导入导出 - 折叠显示
     with st.expander("💾 导入/导出/缓存", expanded=False):
         # 导入
         import_file = st.file_uploader(
             "导入JSON",
             type=["json"],
             key="import_rules",
-            label_visibility="collapsed",
-            help=HELP_TEXTS["rule_import"]
+            label_visibility="collapsed"
         )
 
         if import_file:
@@ -1496,15 +1124,13 @@ with col_main_right:
                     file_name="rules.json",
                     mime="application/json",
                     key="export_rules",
-                    use_container_width=True,
-                    help=HELP_TEXTS["rule_export"]
+                    use_container_width=True
                 )
             with col_exp2:
-                if st.button("💾 保存缓存", key="save_cache", use_container_width=True,
-                             help=HELP_TEXTS["rule_cache"]):
-                    if cache_manager.save_rules(st.session_state.replace_rules):
-                        st.success("✅ 已保存到缓存", icon="✅")
-                        st.rerun()
+                if st.button("💾 保存缓存", key="save_cache", use_container_width=True):
+                    cache_name = f"rules_{datetime.now().strftime('%m%d_%H%M')}"
+                    cache_manager.save_rules(st.session_state.replace_rules, cache_name)
+                    st.success("✅ 已保存", icon="✅")
 
 st.markdown("---")
 
@@ -1514,18 +1140,17 @@ st.subheader("⚙️ 替换参数配置")
 col_config1, col_config2, col_config3, col_config4 = st.columns(4, gap="small")
 
 with col_config1:
-    st.markdown(create_tooltip("**核心字段**", "file_name_col"), unsafe_allow_html=True)
+    st.markdown("**核心字段**")
     file_name_col = st.selectbox(
         "用于文件名",
         options=excel_cols if excel_cols else ["未选择"],
         key="file_name_col",
         disabled=not excel_cols,
-        label_visibility="collapsed",
-        help=HELP_TEXTS["file_name_col"]
+        label_visibility="collapsed"
     )
 
 with col_config2:
-    st.markdown(create_tooltip("**起始行**", "start_row"), unsafe_allow_html=True)
+    st.markdown("**起始行**")
     start_row = st.number_input(
         "开始",
         min_value=1,
@@ -1533,12 +1158,11 @@ with col_config2:
         value=1,
         key="start_row",
         disabled=excel_df is None or len(excel_df) == 0,
-        label_visibility="collapsed",
-        help=HELP_TEXTS["start_row"]
+        label_visibility="collapsed"
     )
 
 with col_config3:
-    st.markdown(create_tooltip("**结束行**", "end_row"), unsafe_allow_html=True)
+    st.markdown("**结束行**")
     end_row = st.number_input(
         "结束",
         min_value=1,
@@ -1546,20 +1170,18 @@ with col_config3:
         value=len(excel_df) if excel_df is not None and len(excel_df) > 0 else 1,
         key="end_row",
         disabled=excel_df is None or len(excel_df) == 0,
-        label_visibility="collapsed",
-        help=HELP_TEXTS["end_row"]
+        label_visibility="collapsed"
     )
 
 with col_config4:
-    st.markdown(create_tooltip("**文件前缀**", "file_prefix"), unsafe_allow_html=True)
+    st.markdown("**文件前缀**")
     file_prefix = st.text_input(
         "前缀",
         value="",
         key="file_prefix",
         placeholder="可选",
         max_chars=15,
-        label_visibility="collapsed",
-        help=HELP_TEXTS["file_prefix"]
+        label_visibility="collapsed"
     ).strip()
 
 if start_row > end_row:
@@ -1587,8 +1209,7 @@ with col_exec1:
         key="replace",
         disabled=not can_replace or st.session_state.is_replacing or start_row > end_row,
         type="primary",
-        use_container_width=True,
-        help=HELP_TEXTS["start_replace"]
+        use_container_width=True
     )
 
 with col_exec2:
@@ -1596,6 +1217,12 @@ with col_exec2:
         st.info("🔄 进行中", icon="🔄")
     elif len(st.session_state.replaced_files) > 0 and not need_replace:
         st.success(f"✅ {len(st.session_state.replaced_files)}个", icon="✅")
+
+with col_exec3:
+    pass
+
+with col_exec4:
+    pass
 
 # 执行替换逻辑
 if replace_btn and not st.session_state.is_replacing:
@@ -1673,7 +1300,8 @@ st.markdown("---")
 if len(st.session_state.replaced_files) > 0:
     st.subheader("💾 下载结果")
 
-    col_export_opt1, col_export_opt2 = st.columns([2, 2])
+    # 选项卡：导出方式
+    col_export_opt1, col_export_opt2, col_export_opt3 = st.columns([2, 2, 2], gap="small")
 
     with col_export_opt1:
         st.markdown("**导出方式**")
@@ -1688,7 +1316,7 @@ if len(st.session_state.replaced_files) > 0:
 
     st.markdown("---")
 
-    # 统计信息
+    # 统计信息 - 紧凑显示
     col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4, gap="small")
 
     with col_stat1:
@@ -1701,7 +1329,7 @@ if len(st.session_state.replaced_files) > 0:
 
     with col_stat3:
         total_replace = sum(f.replace_count for f in st.session_state.replaced_files)
-        st.metric("🔄 替换次", total_replace)
+        st.metric("🔄 替换次数", total_replace)
 
     with col_stat4:
         st.metric("📋 规则数", len(st.session_state.replace_rules))
@@ -1727,14 +1355,13 @@ if len(st.session_state.replaced_files) > 0:
                     zip_filename = f"批量替换_{len(valid_files)}个.zip"
 
                     st.download_button(
-                        label=f"📦 下载ZIP（{len(valid_files)}个）",
+                        label=f"📦 下载ZIP",
                         data=zip_buffer,
                         file_name=zip_filename,
                         mime="application/zip",
                         key="download_all_zip",
                         use_container_width=True,
-                        type="primary",
-                        help=HELP_TEXTS["export_zip"]
+                        type="primary"
                     )
             except:
                 st.error("❌ 创建ZIP失败", icon="❌")
@@ -1747,24 +1374,23 @@ if len(st.session_state.replaced_files) > 0:
                     merged_data = merge_word_documents(valid_files)
 
                     st.download_button(
-                        label=f"📋 下载合并文档（{len(valid_files)}个）",
+                        label=f"📋 下载合并文档",
                         data=merged_data,
                         file_name="合并结果.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="download_merged",
                         use_container_width=True,
-                        type="primary",
-                        help=HELP_TEXTS["export_merge"]
+                        type="primary"
                     )
                 except:
                     st.error("❌ 合并失败", icon="❌")
 
     with col_down2:
-        if st.button("📊 导出统计", key="export_stats", use_container_width=True,
-                     help=HELP_TEXTS["export_stats"]):
+        # 导出统计
+        if st.button("📊 导出统计", key="export_stats", use_container_width=True):
             csv_data = export_statistics_to_csv(st.session_state.replaced_files)
             st.download_button(
-                label="📥 下载CSV统计",
+                label="📥 下载CSV",
                 data=csv_data,
                 file_name="统计.csv",
                 mime="text/csv",
@@ -1773,6 +1399,7 @@ if len(st.session_state.replaced_files) > 0:
             )
 
     with col_down3:
+        # 日志导出
         if st.session_state.replace_log:
             log_text = "\n".join(st.session_state.replace_log)
             st.download_button(
@@ -1781,15 +1408,13 @@ if len(st.session_state.replaced_files) > 0:
                 file_name="替换日志.txt",
                 mime="text/plain",
                 key="download_log",
-                use_container_width=True,
-                help=HELP_TEXTS["export_log"]
+                use_container_width=True
             )
 
     st.markdown("---")
 
-    # 文件列表
-    st.markdown(create_tooltip(f"**文件列表** ({len(st.session_state.replaced_files)})", "rule_list"),
-                unsafe_allow_html=True)
+    # 文件列表 - 紧凑显示
+    st.markdown(f"**文件列表** ({len(st.session_state.replaced_files)})")
 
     # 分页
     total_pages = (len(st.session_state.replaced_files) + PAGE_SIZE - 1) // PAGE_SIZE
@@ -1812,7 +1437,7 @@ if len(st.session_state.replaced_files) > 0:
 
     st.caption(f"第 {current_page}/{total_pages} 页")
 
-    # 文件表格
+    # 文件表格显示
     file_data = []
     for idx, file in enumerate(current_files, start=start_idx + 1):
         is_valid = file.data and len(file.data.getvalue()) > 0
@@ -1835,26 +1460,24 @@ if len(st.session_state.replaced_files) > 0:
     for idx, file in enumerate(current_files, start=start_idx + 1):
         is_valid = file.data and len(file.data.getvalue()) > 0
 
-        col_name, col_log, col_download = st.columns([2, 1, 1], gap="small")
+        col_name, col_log, col_btn = st.columns([2, 1, 1], gap="small")
 
         with col_name:
             st.caption(f"#{idx} {file.filename}")
 
         with col_log:
-            if st.button("📋 日志", key=f"log_{idx}", use_container_width=True,
-                         help=HELP_TEXTS["single_log"]):
-                st.write(file.log)
+            with st.expander("📋", expanded=False):
+                st.text(file.log)
 
-        with col_download:
+        with col_btn:
             st.download_button(
-                label="⬇️ 下载",
+                label="⬇️",
                 data=file.data,
                 file_name=file.filename,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"download_{idx}",
                 disabled=not is_valid,
-                use_container_width=True,
-                help=HELP_TEXTS["single_download"]
+                use_container_width=True
             )
 
 else:
@@ -1863,47 +1486,30 @@ else:
 # ==================== 底部帮助 ====================
 st.markdown("---")
 
-with st.expander("❓ 帮助指南", expanded=False):
+with st.expander("❓ 帮助", expanded=False):
     col_help1, col_help2 = st.columns(2, gap="medium")
 
     with col_help1:
         st.markdown("""
         **快速开始**
-        1. 📤 上传Word和Excel文件
-        2. 📋 添加替换规则
-        3. ▶️ 点击"开始替换"
-        4. 💾 下载结果
+        1. 上传Word和Excel文件
+        2. 添加替换规则
+        3. 点击"开始替换"
+        4. 下载结果
 
         **支持格式**
-        • Word：.docx（不支持.doc）
+        • Word：.docx
         • Excel：.xlsx/.xls
         • 括号：【】（）()〔〕
-
-        **文件限制**
-        • Word最大50MB
-        • Excel最大50MB
-        • 建议行数<1000
         """)
 
     with col_help2:
         st.markdown("""
         **常见问题**
-
-        ❓ **Word文件不支持.doc？**
-        用Word打开文件 → 另存为.docx格式
-
-        ❓ **怎样保留格式？**
-        所有格式自动保留：字体、颜色、表格等
-
-        ❓ **如何合并文档？**
-        选择"合并为单个文档"导出方式
-
-        ❓ **能否撤销操作？**
-        点击"↶ 撤销"按钮撤销最后一次规则操作
-
-        ❓ **缓存文件保存在哪？**
-        Windows：`%APPDATA%/BatchReplacer`
-        Mac/Linux：`~/.cache/batch_replacer`
+        • .doc文件：转换为.docx
+        • 格式丢失：工具保留所有格式
+        • 大文件：建议分批处理
+        • 错误恢复：使用"撤销"功能
         """)
 
-st.caption(f"Word+Excel批量替换工具 {VERSION} © 2026")
+st.caption(f"v{VERSION} © 2024 Word+Excel批量替换工具")

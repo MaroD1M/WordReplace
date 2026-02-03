@@ -1,7 +1,8 @@
 """
-Word+Excel批量替换工具 v1.5.4 最终版
+Word+Excel批量替换工具 v1.5.2
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
-特性：规范的缓存管理、高性能预览、全面Bug修复
+作者：AI Assistant
+特性：鼠标悬浮显示帮助信息，完整的功能提示
 """
 
 # ==================== 导入库 ====================
@@ -38,36 +39,18 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.5.4"
+VERSION = "v1.5.2"
 
 # 页面配置常量
 PAGE_SIZE = 10
 WIDGET_HEIGHT = 250
-PREVIEW_ROWS = 50
+PREVIEW_ROWS = 20
 MAX_FILENAME_LENGTH = 200
 MAX_WORD_FILE_SIZE = 50 * 1024 * 1024
 MAX_EXCEL_FILE_SIZE = 50 * 1024 * 1024
+CACHE_DIR = ".replace_cache"
+HISTORY_FILE = ".replace_history.json"
 MAX_HISTORY_ITEMS = 30
-
-# ===== 缓存目录管理 =====
-# 获取用户的本地缓存目录（跨平台兼容）
-if os.name == 'nt':  # Windows
-    CACHE_BASE_DIR = os.path.join(os.environ.get('APPDATA', ''), 'BatchReplacer')
-else:  # Linux/Mac
-    CACHE_BASE_DIR = os.path.expanduser('~/.cache/batch_replacer')
-
-# 创建缓存子目录
-CACHE_RULES_DIR = os.path.join(CACHE_BASE_DIR, 'rules')  # 规则缓存目录
-CACHE_HISTORY_DIR = os.path.join(CACHE_BASE_DIR, 'history')  # 历史记录目录
-CACHE_TEMP_DIR = os.path.join(CACHE_BASE_DIR, 'temp')  # 临时文件目录
-
-# 历史记录文件（放在缓存目录）
-HISTORY_FILE = os.path.join(CACHE_HISTORY_DIR, 'operation_history.json')
-
-# 规范化缓存目录结构
-for directory in [CACHE_BASE_DIR, CACHE_RULES_DIR, CACHE_HISTORY_DIR, CACHE_TEMP_DIR]:
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
 
 # 过滤警告消息
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -296,7 +279,7 @@ st.markdown("""
 
     .tooltip .tooltiptext {
         visibility: hidden;
-        width: 220px;
+        width: 200px;
         background-color: #1f2937;
         color: #fff;
         text-align: left;
@@ -306,7 +289,7 @@ st.markdown("""
         z-index: 1000;
         bottom: 125%;
         left: 50%;
-        margin-left: -110px;
+        margin-left: -100px;
         opacity: 0;
         transition: opacity 0.3s;
         font-size: 12px;
@@ -331,15 +314,6 @@ st.markdown("""
         opacity: 1;
     }
 
-    /* Excel预览滚动容器 */
-    .excel-preview-container {
-        height: 350px;
-        overflow-y: auto;
-        border: 1px solid #e0e0e0;
-        border-radius: 6px;
-        background-color: #f9f9f9;
-    }
-
     /* 响应式设计 */
     @media (max-width: 768px) {
         .main {
@@ -349,8 +323,8 @@ st.markdown("""
             padding: 0.5rem;
         }
         .tooltip .tooltiptext {
-            width: 180px;
-            margin-left: -90px;
+            width: 150px;
+            margin-left: -75px;
         }
     }
 </style>
@@ -363,7 +337,7 @@ HELP_TEXTS = {
     "excel_upload": "上传包含替换数据的Excel文件(.xlsx或.xls格式)",
     "replace_scope": "选择替换模式：完整关键词直接替换，括号内容只替换括号里的文字",
     "file_name_col": "选择Excel中的列用于生成文件名，通常选择唯一标识符列",
-    "start_row": "从第几行开始处理替换",
+    "start_row": "从第几行开始处理替换（第1行通常是标题，从第2行开始）",
     "end_row": "处理到第几行（包括该行），默认到最后一行",
     "file_prefix": "为生成的文件名添加前缀，如'2024-'会生成'2024-文件名.docx'",
     "new_keyword": "从Word预览中复制要替换的关键字，如【姓名】、（部门）",
@@ -415,65 +389,6 @@ def create_tooltip(text: str, help_key: str = "") -> str:
     return html
 
 
-def format_file_size(size_bytes: int) -> str:
-    """
-    格式化文件大小为可读的字符串
-
-    Args:
-        size_bytes: 文件大小（字节）
-
-    Returns:
-        格式化后的文件大小字符串（如 1.23MB）
-    """
-    if size_bytes == 0:
-        return "0B"
-
-    size_names = ("B", "KB", "MB", "GB")
-    i = int(0)
-    while size_bytes >= 1024 and i < len(size_names) - 1:
-        size_bytes /= 1024.0
-        i += 1
-
-    return f"{size_bytes:.2f}{size_names[i]}"
-
-
-def get_cache_info() -> Dict:
-    """
-    获取缓存目录信息（包括大小和文件数）
-
-    Returns:
-        缓存信息字典
-    """
-    info = {
-        "rules_count": 0,
-        "history_count": 0,
-        "total_size": 0,
-        "rules_dir": CACHE_RULES_DIR,
-        "history_file": HISTORY_FILE,
-    }
-
-    # 统计规则缓存
-    try:
-        if os.path.exists(CACHE_RULES_DIR):
-            files = [f for f in os.listdir(CACHE_RULES_DIR) if f.endswith('.json')]
-            info["rules_count"] = len(files)
-            for f in files:
-                file_path = os.path.join(CACHE_RULES_DIR, f)
-                info["total_size"] += os.path.getsize(file_path)
-    except:
-        pass
-
-    # 统计历史记录
-    try:
-        if os.path.exists(HISTORY_FILE):
-            info["history_count"] = 1
-            info["total_size"] += os.path.getsize(HISTORY_FILE)
-    except:
-        pass
-
-    return info
-
-
 # ==================== 数据结构定义 ====================
 
 @dataclass
@@ -500,71 +415,28 @@ class HistoryRecord:
 # ==================== 缓存管理器 ====================
 
 class CacheManager:
-    """
-    管理替换规则的缓存
-
-    缓存文件结构：
-    ~/.cache/batch_replacer/
-    ├── rules/                    # 规则缓存目录
-    │   ├── rule_20240115_1430.json
-    │   ├── rule_20240115_1435.json
-    │   └── ...
-    ├── history/                  # 历史记录目录
-    │   └── operation_history.json
-    └── temp/                      # 临时文件目录
-    """
+    """管理替换规则的缓存"""
 
     def __init__(self):
-        """初始化缓存管理器，确保缓存目录存在"""
-        self.rules_dir = CACHE_RULES_DIR
-        self.history_dir = CACHE_HISTORY_DIR
-        self.temp_dir = CACHE_TEMP_DIR
+        """初始化缓存管理器"""
+        self.cache_dir = CACHE_DIR
+        if not os.path.exists(self.cache_dir):
+            os.makedirs(self.cache_dir)
 
-        # 确保目录存在
-        for directory in [self.rules_dir, self.history_dir, self.temp_dir]:
-            if not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-
-    def save_rules(self, rules: List[Tuple[str, str]], filename: str = None) -> bool:
-        """
-        保存规则到缓存文件
-
-        Args:
-            rules: 规则列表
-            filename: 自定义文件名（不包含扩展名）。如果为None，使用时间戳
-
-        Returns:
-            是否保存成功
-        """
+    def save_rules(self, rules: List[Tuple[str, str]], filename: str):
+        """保存规则到JSON缓存文件"""
         try:
-            # 生成规范的文件名
-            if filename is None:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"rule_{timestamp}"
-
             rules_data = [{"keyword": old, "excel_column": col} for old, col in rules]
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-
+            cache_file = os.path.join(self.cache_dir, f"{filename}.json")
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(rules_data, f, ensure_ascii=False, indent=2)
-
-            return True
         except Exception as e:
-            st.warning(f"⚠️ 保存规则缓存失败：{str(e)[:50]}", icon="⚠️")
-            return False
+            st.warning(f"⚠️ 保存缓存失败", icon="⚠️")
 
     def load_rules(self, filename: str) -> List[Tuple[str, str]]:
-        """
-        从缓存文件加载规则
-
-        Args:
-            filename: 缓存文件名（不包含扩展名）
-
-        Returns:
-            规则列表
-        """
+        """从缓存文件加载规则"""
         try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.cache_dir, f"{filename}.json")
             if os.path.exists(cache_file):
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     rules_data = json.load(f)
@@ -574,104 +446,24 @@ class CacheManager:
         return []
 
     def get_cached_rules_list(self) -> List[str]:
-        """
-        获取所有缓存的规则文件列表（按时间降序排列）
-
-        Returns:
-            规则文件名列表（最近30个）
-        """
+        """获取所有缓存的规则文件列表"""
         try:
-            if os.path.exists(self.rules_dir):
-                files = [f.replace('.json', '') for f in os.listdir(self.rules_dir) if f.endswith('.json')]
-                # 按修改时间降序排列
-                files_with_time = []
-                for f in files:
-                    full_path = os.path.join(self.rules_dir, f"{f}.json")
-                    mtime = os.path.getmtime(full_path)
-                    files_with_time.append((f, mtime))
-
-                files_with_time.sort(key=lambda x: x[1], reverse=True)
-                return [f[0] for f in files_with_time[:30]]
+            if os.path.exists(self.cache_dir):
+                files = [f.replace('.json', '') for f in os.listdir(self.cache_dir) if f.endswith('.json')]
+                return sorted(files, reverse=True)[:10]
         except:
             pass
         return []
-
-    def delete_rule(self, filename: str) -> bool:
-        """
-        删除缓存的规则文件
-
-        Args:
-            filename: 规则文件名（不包含扩展名）
-
-        Returns:
-            是否删除成功
-        """
-        try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-            if os.path.exists(cache_file):
-                os.remove(cache_file)
-                return True
-        except:
-            pass
-        return False
-
-    def get_rule_info(self, filename: str) -> Dict:
-        """
-        获取规则文件信息
-
-        Args:
-            filename: 规则文件名（不包含扩展名）
-
-        Returns:
-            规则文件信息字典（创建时间、大小、规则数）
-        """
-        try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
-            if os.path.exists(cache_file):
-                stat = os.stat(cache_file)
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    rules_data = json.load(f)
-
-                return {
-                    "filename": filename,
-                    "size": format_file_size(stat.st_size),
-                    "rules_count": len(rules_data),
-                    "mtime": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
-                }
-        except:
-            pass
-        return None
-
-    def clear_all_cache(self) -> bool:
-        """
-        清除所有缓存文件
-
-        Returns:
-            是否清除成功
-        """
-        try:
-            for directory in [self.rules_dir, self.history_dir, self.temp_dir]:
-                if os.path.exists(directory):
-                    for file in os.listdir(directory):
-                        file_path = os.path.join(directory, file)
-                        if os.path.isfile(file_path):
-                            os.remove(file_path)
-            return True
-        except:
-            pass
-        return False
 
 
 # ==================== 历史记录管理器 ====================
 
 class HistoryManager:
-    """管理操作历史记录（保存到缓存目录）"""
+    """管理操作历史记录"""
 
     def __init__(self):
         """初始化历史记录管理器"""
         self.history_file = HISTORY_FILE
-        # 确保目录存在
-        os.makedirs(os.path.dirname(self.history_file), exist_ok=True)
 
     def add_record(self, record: HistoryRecord):
         """添加操作记录到历史"""
@@ -726,7 +518,6 @@ def init_session_state():
         "undo_stack": [],
         "rule_filter": "",
         "show_advanced": False,
-        "excel_cache": None,
     }
 
     for key, default in required_states.items():
@@ -996,7 +787,7 @@ def get_replace_params(
         file_prefix: str,
         file_suffix: str
 ) -> Dict:
-    """获取替换参数，用于判断是否需要重新替换"""
+    """获取替换参数"""
     return {
         "word_filename": word_file.name if word_file else "",
         "excel_rows": len(excel_df) if excel_df is not None else 0,
@@ -1009,7 +800,7 @@ def get_replace_params(
 
 
 def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
-    """清理Excel数据类型，避免混合类型导致的问题"""
+    """清理Excel数据类型"""
     df_clean = df.copy()
 
     for col in df_clean.columns:
@@ -1032,7 +823,7 @@ def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_file_hash(file_data: bytes) -> str:
-    """获取文件哈希值（用于验证文件完整性）"""
+    """获取文件哈希值"""
     return hashlib.md5(file_data).hexdigest()[:6]
 
 
@@ -1093,62 +884,20 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # 缓存信息显示
-    cache_info = get_cache_info()
-    with st.expander("💾 缓存信息", expanded=False):
-        col_info1, col_info2 = st.columns(2)
-        with col_info1:
-            st.caption(f"**规则缓存**: {cache_info['rules_count']} 个")
-        with col_info2:
-            st.caption(f"**总大小**: {format_file_size(cache_info['total_size'])}")
-
-        st.caption(f"📂 位置: {cache_info['rules_dir']}")
-
-        # 清除缓存按钮
-        if st.button("🗑️ 清除所有缓存", key="clear_cache_all", use_container_width=True):
-            if cache_manager.clear_all_cache():
-                st.success("✅ 缓存已清除", icon="✅")
-                st.rerun()
-
-    st.markdown("---")
-
     # 快速功能
     st.subheader("⚡ 快速功能")
 
     # 快速加载缓存规则
     cached = cache_manager.get_cached_rules_list()
     if cached:
-        st.markdown("**📂 加载规则缓存**")
-        selected = st.selectbox(
-            "选择规则",
-            options=["选择..."] + cached,
-            key="sidebar_cache",
-            label_visibility="collapsed"
-        )
-
+        selected = st.selectbox("📂 加载规则", ["选择..."] + cached, key="sidebar_cache")
         if selected and selected != "选择...":
-            # 显示规则信息
-            rule_info = cache_manager.get_rule_info(selected)
-            if rule_info:
-                st.caption(f"📋 {rule_info['rules_count']} 个规则 | 📅 {rule_info['mtime']}")
-
-            col_load, col_del = st.columns(2, gap="small")
-            with col_load:
-                if st.button("✅ 加载", key="sidebar_load", use_container_width=True):
-                    loaded = cache_manager.load_rules(selected)
-                    if loaded:
-                        st.session_state.replace_rules = loaded
-                        st.success(f"✅ 加载{len(loaded)}条规则", icon="✅")
-                        st.rerun()
-            with col_del:
-                if st.button("🗑️ 删除", key="sidebar_del_cache", use_container_width=True):
-                    if cache_manager.delete_rule(selected):
-                        st.success("✅ 规则已删除", icon="✅")
-                        st.rerun()
-    else:
-        st.info("📁 暂无缓存规则", icon="ℹ️")
-
-    st.markdown("---")
+            if st.button("✅ 加载", key="sidebar_load", use_container_width=True):
+                loaded = cache_manager.load_rules(selected)
+                if loaded:
+                    st.session_state.replace_rules = loaded
+                    st.success(f"✅ 加载{len(loaded)}条", icon="✅")
+                    st.rerun()
 
     # 历史记录显示
     history = history_manager.load_history()
@@ -1163,14 +912,14 @@ with st.sidebar:
     # 工具操作
     st.subheader("🔧 工具")
 
-    if st.button("🗑️ 清空当前规则", key="sidebar_clear", use_container_width=True):
+    if st.button("🗑️ 清空所有", key="sidebar_clear", use_container_width=True):
         st.session_state.replace_rules = []
         st.session_state.replaced_files = []
         st.success("✅ 已清空", icon="✅")
         st.rerun()
 
     if history:
-        if st.button("📜 清除历史记录", key="sidebar_clear_hist", use_container_width=True):
+        if st.button("📜 清除历史", key="sidebar_clear_hist", use_container_width=True):
             history_manager.clear_history()
             st.rerun()
 
@@ -1217,14 +966,12 @@ with col_main_left:
             help="仅支持.docx格式"
         )
         if word_file:
-            file_size_bytes = len(word_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
-
-            if file_size_bytes > MAX_WORD_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+            file_size_mb = len(word_file.getvalue()) / 1024 / 1024
+            if file_size_mb > MAX_WORD_FILE_SIZE / 1024 / 1024:
+                st.error(f"❌ 文件过大", icon="❌")
                 word_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.caption(f"✅ {file_size_mb:.1f}MB")
 
     with col_upload2:
         st.markdown(create_tooltip("**Excel数据**", "excel_upload"), unsafe_allow_html=True)
@@ -1237,14 +984,12 @@ with col_main_left:
             help="支持.xlsx/.xls格式"
         )
         if excel_file:
-            file_size_bytes = len(excel_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
-
-            if file_size_bytes > MAX_EXCEL_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+            file_size_mb = len(excel_file.getvalue()) / 1024 / 1024
+            if file_size_mb > MAX_EXCEL_FILE_SIZE / 1024 / 1024:
+                st.error(f"❌ 文件过大", icon="❌")
                 excel_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.caption(f"✅ {file_size_mb:.1f}MB")
 
     st.markdown("---")
 
@@ -1325,13 +1070,12 @@ with col_main_left:
                                 excel_df = clean_excel_types(excel_df)
                                 excel_cols = excel_df.columns.tolist()
 
-                                preview_df = excel_df.head(PREVIEW_ROWS)
-
+                                preview_df = excel_df.head(5)
                                 st.dataframe(
                                     preview_df,
                                     use_container_width=True,
                                     hide_index=True,
-                                    height=280
+                                    height=150
                                 )
 
                                 col_s1, col_s2 = st.columns(2)
@@ -1502,9 +1246,9 @@ with col_main_right:
             with col_exp2:
                 if st.button("💾 保存缓存", key="save_cache", use_container_width=True,
                              help=HELP_TEXTS["rule_cache"]):
-                    if cache_manager.save_rules(st.session_state.replace_rules):
-                        st.success("✅ 已保存到缓存", icon="✅")
-                        st.rerun()
+                    cache_name = f"rules_{datetime.now().strftime('%m%d_%H%M')}"
+                    cache_manager.save_rules(st.session_state.replace_rules, cache_name)
+                    st.success("✅ 已保存", icon="✅")
 
 st.markdown("---")
 
@@ -1901,9 +1645,10 @@ with st.expander("❓ 帮助指南", expanded=False):
         ❓ **能否撤销操作？**
         点击"↶ 撤销"按钮撤销最后一次规则操作
 
-        ❓ **缓存文件保存在哪？**
-        Windows：`%APPDATA%/BatchReplacer`
-        Mac/Linux：`~/.cache/batch_replacer`
+        ❓ **如何加快速度？**
+        • 分批处理（每批100-200行）
+        • 使用SSD硬盘
+        • 关闭其他程序
         """)
 
-st.caption(f"Word+Excel批量替换工具 {VERSION} © 2026")
+st.caption(f"Word+Excel批量替换工具 {VERSION} © 2024")
