@@ -63,7 +63,7 @@ services:
 git clone https://github.com/你的用户名/wordreplace.git
 cd wordreplace
 pip install -r requirements.txt
-streamlit run app/main.py
+streamlit run app/main(合并一个).py
 ```
 
 ## 📖 使用流程
