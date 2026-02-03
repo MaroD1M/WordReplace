@@ -1,10 +1,10 @@
-﻿# Word+Excel 批量替换工具
+# Word+Excel 批量替换工具
 
 > 基于 Streamlit 的 Word 模板与 Excel 数据批量替换工具，支持保留格式、批量导出
 
-![Version](https://img.shields.io/badge/version-v1.5.6-blue)
-![Python](https://img.shields.io/badge/python-3.10+-green)
-![License](https://img.shields.io/badge/license-MIT-orange)
+![Banner](assets/banner.svg)
+
+![Version](https://img.shields.io/badge/version-v1.5.6-blue)   ![Python](https://img.shields.io/badge/python-3.10+-green)   ![License](https://img.shields.io/badge/license-MIT-orange)
 
 ## 功能特性
 
