@@ -1,186 +1,217 @@
-# 部署后界面
-<img width="2552" height="3306" alt="image" src="https://github.com/user-attachments/assets/87d05e81-d848-4221-9eff-f504717f945f" />
+﻿# Word+Excel批量替换工具
 
-# 📋 Word+Excel 批量替换工具
+## 🚀 项目简介
 
-🚀 **智能文档批量处理工具** - 让Word和Excel的批量替换变得简单高效！
+这是一个基于Streamlit的Web应用程序，用于批量处理Word文档和Excel数据，实现自动化文档生成。该工具可以从Word模板文件中提取内容，并使用Excel中的数据批量替换模板中的占位符，从而生成大量个性化的文档。
 
-## ✨ 核心功能
+### ✨ 核心功能
 
-- 🔄 **批量替换** - 基于Excel数据批量替换Word文档内容
+- **批量替换** - 从Word模板中提取占位符，并用Excel中的数据进行批量替换
+- **格式保留** - 保留原始Word文档的格式，包括字体、表格、颜色等
+- **智能规则管理** - 支持创建、导入、导出和缓存替换规则
+- **文件预览** - 在执行替换前预览Word和Excel文件内容
+- **多输出选项** - 支持ZIP打包下载、合并为单个文档、导出统计数据等多种输出方式
+- **历史记录** - 记录每次操作的历史，方便追踪和回溯
+- **统计分析** - 提供替换统计信息和操作成功率
+- **高性能处理** - 支持处理大容量文档和数据集
 
-- 📊 **表格支持** - 完美支持Word表格内的文字替换
+## 🛠️ 部署
 
-- 🎨 **格式保留** - 替换后保持原有字体、颜色、样式不变
+### 本地运行
 
-- 🖥️ **可视化界面** - 友好的Web操作界面，无需编程经验
+1. 克隆仓库
+   ```bash
+   git clone https://github.com/MaroD1M/WordReplace.git
+   cd WordReplace
+   ```
 
-- 📦 **灵活下载** - 支持单个文件下载和ZIP压缩包批量下载
+2. 安装依赖
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- 💾 **结果持久化** - 替换结果在会话期间持久保存
+3. 运行应用
+   ```bash
+   streamlit run app/main.py
+   ```
 
-- 📤📥 **替换规则导入/导出** - 支持JSON格式导入导出替换规则，方便重复使用
+### Docker部署
 
-- 🔢 **数值精度修复** - 智能修复Excel中公式计算后数值精度问题（如0.48729999999999996被修复为0.4873）
+1. 构建镜像
+   ```bash
+   docker build -t word-replace .
+   ```
 
-- 📊 **列类型智能识别** - 针对"合计"等特殊列进行专门处理，确保数值格式正确
+2. 运行容器
+   ```bash
+   docker run -d -p 8501:8501 word-replace
+   ```
 
-- 🔍 **高精度计算** - 使用Decimal类型进行精确计算，避免浮点数二进制表示导致的精度损失
+3. 访问应用：http://localhost:8501
 
-- 📛 **文件后缀自定义** - 支持为生成的文件名添加自定义后缀
+### Docker Compose部署
 
-- 🖱️ **行选中效果** - 规则列表和导出结果表格提供清晰的行选中视觉反馈
+1. 修改环境变量（可选）
+   ```bash
+   export GITHUB_USERNAME=your_username
+   export TAG=latest
+   export EXTERNAL_PORT=12344
+   ```
 
-- 📋 **灵活的替换范围** - 支持替换完整关键词或仅替换括号内内容
+2. 启动服务
+   ```bash
+   docker-compose up -d
+   ```
 
-- 🎯 **规则去重** - 导入替换规则时自动去重，避免重复替换
+3. 访问应用：http://localhost:8501
 
-- 📝 **友好的错误提示** - 提供详细的错误信息和操作指导
+### GitHub Container Registry部署
 
-## 🚀 快速开始
+使用预构建的镜像：
+```bash
+# 拉取最新版本
+docker pull ghcr.io/marod1m/wordreplace:latest
 
-### 🐳 Docker 一键部署（推荐）
-
-```Bash
-version: '3.8'
-services:
-  word-excel-replace:
-    image: ghcr.io/marod1m/wordreplace:latest
-    container_name: Wordreplace-tool
-    network_mode: bridge
-    ports:
-      - "12344:8501"
-    restart: no
-    environment:
-      - STREAMLIT_SERVER_HEADLESS=true
-      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-
+# 拉取指定版本
+docker pull ghcr.io/marod1m/wordreplace:v1.5.4
 ```
 
-### ⚡ 本地运行
-
-```Bash
-git clone https://github.com/你的用户名/wordreplace.git
-cd wordreplace
-pip install -r requirements.txt
-streamlit run app/main(合并一个).py
+运行镜像：
+```bash
+docker run -d -p 8501:8501 ghcr.io/marod1m/wordreplace:latest
 ```
 
-## 📖 使用流程
+## 🚀 运行
 
-1. 📄 **上传文件**
-    - Word模板：上传.docx格式的模板文档
-    - Excel数据：上传.xlsx/.xls格式的数据文件
+### 本地运行
 
-2. 👀 **预览文档**
-    - 查看Word文档内容（含表格）
-    - 选中关键字并按Ctrl+C复制
-    - 预览Excel数据结构和列名
+1. 确保已安装Python 3.10+
+2. 克隆仓库并进入目录
+3. 安装依赖：`pip install -r requirements.txt`
+4. 运行：`streamlit run app/main.py`
+5. 访问：http://localhost:8501
 
-3. ⚙️ **设置规则**
-    - **替换范围设置**：选择替换完整关键词或仅替换括号内内容
-    - **规则管理**：
-      - 手动添加：粘贴关键字，选择对应Excel列，点击添加
-      - 批量导入：上传JSON格式的替换规则文件
-      - 批量导出：将当前规则导出为JSON文件保存
-    - **规则列表**：查看所有添加的规则，支持单个删除
+### PyCharm运行
 
-4. 🚀 **执行替换**
-    - **文件名设置**：
-      - 选择核心字段（Excel列）作为文件名基础
-      - 设置文件前缀（可选）
-      - 设置文件后缀（可选）
-    - **替换范围**：选择全部行或指定行范围
-    - 点击"开始替换"按钮执行批量替换
+1. 打开项目
+2. 配置Python解释器（3.10+）
+3. 在Terminal中运行：`streamlit run app/main.py`
 
-5. 📥 **下载结果**
-    - **单文件下载**：分页显示生成的文件，每行显示文件名和下载按钮
-    - **批量下载**：一键下载所有文件的ZIP压缩包
-    - **替换日志**：查看详细的替换过程日志
+### Docker运行
 
-## 🛠️ 技术栈
+1. 构建镜像：`docker build -t word-replace .`
+2. 运行容器：`docker run -d -p 8501:8501 word-replace`
+3. 访问：http://localhost:8501
 
-|技术|用途|版本|链接|
-|---|---|---|---|
-|🐍 Python|后端逻辑处理|3.10+|[Python官网](https://www.python.org/)|
-|🎈 Streamlit|Web界面框架|1.51.0+|[Streamlit官网](https://streamlit.io/)|
-|📊 Pandas|数据处理|2.0+|[Pandas文档](https://pandas.pydata.org/)|
-|📄 python-docx|Word文档处理|0.8.11+|[python-docx文档](https://python-docx.readthedocs.io/)|
-|📊 openpyxl|Excel文件处理|3.1+|[openpyxl文档](https://openpyxl.readthedocs.io/)|
-|🐳 Docker|容器化部署|20.10+|[Docker官网](https://www.docker.com/)|
+## 📋 功能介绍
 
-## 🔧 常见问题与解决方案
+### 主要功能
 
-### Q: 为什么替换后格式会丢失？
-A: 工具会尽量保留原始格式，但过于复杂的格式可能无法完全保留。建议使用简单、规范的Word模板。
+- **Word模板处理**：支持.docx格式的Word文档，保留原有格式
+- **Excel数据源**：支持.xlsx/.xls格式的数据表，可预览内容
+- **规则管理**：可视化创建替换规则，支持导入导出
+- **批量处理**：一次处理多行数据，生成多个文档
+- **格式保持**：处理过程中保持原文档的格式不变
+- **缓存机制**：支持规则缓存，提高重复操作效率
+- **历史记录**：记录操作历史，便于追溯和复用
+- **统计功能**：显示处理进度和成功率
 
-### Q: 为什么Excel中的数值精度有问题？
-A: 工具已内置数值精度修复功能，会自动处理浮点数精度问题。若仍有问题，可检查Excel源文件格式。
+### 使用流程
 
-### Q: 替换规则导入失败？
-A: 请确保JSON格式正确，每个规则应包含"keyword"和"excel_column"字段，如：
-```json
-[
-  {"keyword": "【姓名】", "excel_column": "姓名"},
-  {"keyword": "(日期)", "excel_column": "日期"}
-]
-```
+1. **上传文件**：上传Word模板和Excel数据文件
+2. **预览内容**：查看文档和数据的预览
+3. **创建规则**：从Word预览中选择占位符，关联Excel列
+4. **设置参数**：选择起始和结束行，设置文件名前缀
+5. **开始替换**：执行批量替换操作
+6. **下载结果**：选择ZIP下载、合并文档等方式获取结果
+
+### 高级功能
+
+- **智能替换**：支持多种括号格式（【】、（）、()等）
+- **仅替换括号内内容**：可选择只替换括号内的文本
+- **文件合并**：可将多个结果文档合并为一个
+- **数据统计**：显示替换成功率和处理统计
+- **缓存管理**：保存常用替换规则，方便下次使用
+- **历史记录**：保留最近的操作记录
+
+## ⚙️ 配置
+
+### 环境变量
+
+- `STREAMLIT_SERVER_HEADLESS` - 设为false禁用统计收集
+- `STREAMLIT_BROWSER_GATHER_USAGE_STATS` - 设为false禁用统计收集
+
+### 文件限制
+
+- Word文件最大10MB
+- Excel文件最大10MB
+- 建议单次处理行数少于1000行
+
+## ❓ 常见问题
 
 ### Q: 支持哪些类型的括号？
-A: 支持【】、（）、()、〔〕等常见括号格式，可选择仅替换括号内内容。
+A: 支持（、）、(、)、【、】等常见括号格式，可选择仅替换括号内内容。
 
-## 📝 更新日志
+### Q: Docker容器启动时出现ModuleNotFoundError: No module named 'packaging'错误？
+A: 这是由于缺少Streamlit的间接依赖packaging模块导致的。已在requirements.txt中添加此依赖，重新构建镜像即可解决：
+```bash
+docker build -t word-replace .
+docker run -d -p 8501:8501 word-replace
+```
 
-### v1.2.0（最新版本）
-- ✨ 新增文件后缀自定义功能
-- ✨ 新增行选中视觉效果
-- 🎨 优化整体界面布局和样式
-- 🐛 修复按钮错位问题
-- 📖 更新使用文档和部署说明
+### Q: 为什么Word文件不支持.doc格式？
+A: 由于技术限制，当前版本仅支持.docx格式。请使用Word将.doc文件另存为.docx格式后再使用。
 
-### v1.1.0
-- ✨ 新增替换范围选择功能
-- ✨ 新增规则导入/导出功能
-- 🔍 优化数值精度修复算法
-- 🎨 改进界面布局和用户体验
+### Q: 如何加快处理速度？
+A: 
+- 分批处理（每批100-200行）
+- 使用SSD硬盘
+- 关闭其他程序
 
-### v1.0.0
-- 🎉 初始版本发布
-- 🔄 基础批量替换功能
-- 📊 Word表格支持
-- 🎨 格式保留功能
-- 📦 灵活下载选项
+### Q: 缓存文件保存在哪里？
+A: 
+- Windows: %APPDATA%/BatchReplacer
+- Mac/Linux: ~/.cache/batch_replacer
 
 ## 🛠️ 技术栈
 
-|技术|用途|
+|技术栈|用途|
 |---|---|
 |🐍 Python 3.10+|后端逻辑处理|
-|🎈 Streamlit 1.51.0|Web界面框架|
-|📊 Pandas|数据处理|
-|📄 python-docx|Word文档处理|
-|📊 openpyxl|Excel文件处理|
+|🌐 Streamlit 1.52.2|Web界面框架|
+|📊 Pandas 2.3.3|数据处理|
+|📄 python-docx 1.2.0|Word文档处理|
+|📊 openpyxl 3.1.5|Excel文件处理|
+|🔧 lxml 6.0.2|XML处理|
+|📦 packaging 26.0|依赖管理|
 |🐳 Docker|容器化部署|
-## ⚡ 使用建议
 
-### 💡 最佳实践：
+
+## 💡 使用建议
+
+### 📌 最佳实践：
 
 - 单次处理建议不超过1000行数据
-
-- 文件大小建议控制在50MB以内
-
+- 文件大小建议控制在10MB以内
 - 确保服务器有2GB+可用内存
+- 大文件建议分批处理
 
-- 大文件建议分批次处理
-
-### 🛡️ 安全提示：
+### 🔒 安全提示：
 
 - 所有处理在内存中进行
-
 - 会话结束自动清理数据
+- 建议在可信任网络环境使用
 
-- 建议在可信网络环境使用
+## 🤝 贡献
 
-⭐ 如果这个项目对你有帮助，请给我们一个Star！
+欢迎提交Issue和Pull Request来改进这个项目！
 
-🌐 访问地址：[http://localhost:12344](http://localhost:12344)（部署后）
+## 📄 许可证
+
+MIT License
+
+## 🆘 支持
+
+😊 如果这个项目对您有帮助，请给我们一个Star！
+
+📍 访问地址：[http://localhost:8501](http://localhost:8501)（本地运行后）
