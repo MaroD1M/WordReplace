@@ -163,6 +163,13 @@ sudo systemctl status word-replace
 
 从 [Releases](https://github.com/MaroD1M/WordReplace/releases) 页面下载最新的 `WordReplace.exe` 文件。
 
+**自动构建说明：**
+- 每次推送版本标签（如 `v1.5.5`）时，GitHub Actions 会自动：
+  - 编译 Windows EXE 文件
+  - 构建 Docker 镜像
+  - 自动创建 Release 并上传文件
+- 你只需要推送标签，无需手动编译或上传
+
 #### 2. 直接运行
 
 双击 `WordReplace.exe` 即可启动应用，应用会自动在浏览器中打开。
@@ -360,7 +367,72 @@ docker tag word-replace:latest ghcr.io/你的用户名/word-replace:latest
 docker push ghcr.io/你的用户名/word-replace:latest
 ```
 
-### 使用 GitHub Actions 自动构建
+## 发布新版本
+
+作为项目维护者，你可以通过推送版本标签来自动构建和发布新版本：
+
+### 自动构建流程
+
+当你推送版本标签时，GitHub Actions 会自动执行以下操作：
+
+1. **编译 Windows EXE**
+   - 在 Windows 环境中编译可执行文件
+   - 打包为单个 EXE 文件
+
+2. **构建 Docker 镜像**
+   - 构建多平台镜像（linux/amd64, linux/arm64）
+   - 推送到 GitHub Container Registry
+
+3. **创建 Release**
+   - 自动创建 GitHub Release
+   - 上传 EXE 文件到 Release
+   - 生成版本说明
+
+### 发布步骤
+
+1. **确保所有更改已提交并推送**
+
+   ```bash
+   git add .
+   git commit -m "feat: 新功能描述"
+   git push origin main
+   ```
+
+2. **创建并推送版本标签**
+
+   ```bash
+   # 创建标签（使用语义化版本号）
+   git tag -a v1.5.5 -m "Release v1.5.5 - 版本描述"
+
+   # 推送标签到远程仓库
+   git push origin v1.5.5
+   ```
+
+3. **等待自动构建完成**
+
+   - 访问 [Actions](https://github.com/MaroD1M/WordReplace/actions) 页面查看构建进度
+   - 构建完成后，访问 [Releases](https://github.com/MaroD1M/WordReplace/releases) 查看新版本
+
+4. **验证发布**
+
+   - 检查 Release 页面是否包含 EXE 文件
+   - 测试下载的 EXE 文件是否能正常运行
+   - 验证 Docker 镜像是否可用
+
+### 版本号规范
+
+请遵循语义化版本号规范（Semantic Versioning）：
+
+- **主版本号（Major）**：不兼容的 API 修改
+- **次版本号（Minor）**：向下兼容的功能性新增
+- **修订号（Patch）**：向下兼容的问题修正
+
+示例：
+- `v1.5.5` - 修订版本（Bug 修复）
+- `v1.6.0` - 次版本（新增功能）
+- `v2.0.0` - 主版本（重大更新）
+
+### Fork 用户的自动构建
 
 如果你 fork 了本仓库，可以启用 GitHub Actions 自动构建：
 
