@@ -1,8 +1,8 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
 build/
 develop-eggs/
@@ -20,6 +20,14 @@ wheels/
 .installed.cfg
 *.egg
 
+# PyInstaller
+*.spec
+*.manifest
+*.pyz
+*.pyz.cached
+build/
+dist/
+
 # Environment
 .env
 .venv
@@ -30,6 +38,7 @@ ENV/
 .github
 readme.md
 deploy.sh
+
 # IDE
 .vscode/
 .idea/

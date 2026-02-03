@@ -157,7 +157,72 @@ sudo systemctl start word-replace
 sudo systemctl status word-replace
 ```
 
-### 方式五：本地运行（开发环境）
+### 方式五：Windows 可执行文件（推荐给小白用户）
+
+#### 1. 下载预编译的 EXE 文件
+
+从 [Releases](https://github.com/MaroD1M/WordReplace/releases) 页面下载最新的 `WordReplace.exe` 文件。
+
+#### 2. 直接运行
+
+双击 `WordReplace.exe` 即可启动应用，应用会自动在浏览器中打开。
+
+**注意：**
+- 首次运行可能需要几分钟时间启动
+- Windows Defender 可能会提示安全警告，请选择"仍要运行"
+- 不需要安装 Python 或任何依赖
+
+#### 3. 自行编译（可选）
+
+如果你想自己编译 EXE 文件，请按照以下步骤操作：
+
+**前置要求：**
+- Windows 操作系统
+- Python 3.10 或更高版本
+
+**编译步骤：**
+
+1. 下载项目源码
+   ```bash
+   git clone https://github.com/MaroD1M/WordReplace.git
+   cd WordReplace
+   ```
+
+2. 双击运行 `build.ps1` 脚本
+
+   脚本会自动完成以下操作：
+   - 检查 Python 环境
+   - 安装 PyInstaller 和应用依赖
+   - 编译生成 EXE 文件
+   - 清理临时文件
+
+   **注意：** 如果 PowerShell 提示执行策略错误，请先运行：
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+3. 编译完成后，可执行文件位于 `dist/WordReplace.exe`
+
+4. 你可以将 `dist/WordReplace.exe` 复制到任何位置使用
+
+**手动编译（高级用户）：**
+
+如果 `build.bat` 脚本无法运行，可以手动执行以下命令：
+
+```bash
+# 安装 PyInstaller
+pip install pyinstaller
+
+# 安装应用依赖
+pip install -r requirements.txt
+
+# 编译
+pyinstaller --clean WordReplace.spec
+
+# 可执行文件位于 dist/WordReplace.exe
+```
+
+### 方式六：本地运行（开发环境）
 
 #### 1. 安装 Python 3.10+
 
@@ -359,6 +424,28 @@ docker rm WordReplace
 docker run -d --name WordReplace -p 12344:8501 ghcr.io/MaroD1M/WordReplace:latest
 ```
 
+### Q: Windows EXE 文件无法运行怎么办？
+
+A: 请检查：
+- 确保下载的是完整的 `WordReplace.exe` 文件
+- Windows Defender 可能会拦截，请选择"仍要运行"
+- 右键点击文件，选择"属性"，点击"解除锁定"
+- 确保你的系统是 Windows 7 或更高版本
+
+### Q: EXE 文件启动很慢正常吗？
+
+A: 是的，首次启动可能需要 2-5 分钟，这是因为：
+- 需要解压内置的 Python 环境
+- 需要初始化 Streamlit 应用
+- 后续启动会快很多
+
+### Q: EXE 文件会被杀毒软件误报吗？
+
+A: 由于 PyInstaller 打包的特性，某些杀毒软件可能会误报。这是正常现象，你可以：
+- 将文件添加到杀毒软件的白名单
+- 从官方 GitHub Releases 下载以确保安全
+- 查看文件哈希值验证完整性
+
 ### Q: 数据会保存在哪里？
 
 A: 本工具的所有数据都在浏览器本地处理，不会上传到任何服务器。缓存规则和历史记录保存在容器的本地文件系统中，容器删除后数据会丢失。
@@ -379,6 +466,26 @@ A: 建议定期：
 - **Excel 处理**：openpyxl
 - **容器化**：Docker
 - **CI/CD**：GitHub Actions
+- **打包工具**：PyInstaller（用于 Windows EXE）
+
+## 下载
+
+### Windows 用户
+
+从 [Releases](https://github.com/MaroD1M/WordReplace/releases) 页面下载：
+- `WordReplace.exe` - Windows 可执行文件（推荐）
+
+### Docker 用户
+
+```bash
+docker pull ghcr.io/MaroD1M/WordReplace:latest
+```
+
+### 源码用户
+
+```bash
+git clone https://github.com/MaroD1M/WordReplace.git
+```
 
 ## 项目结构
 
