@@ -21,7 +21,6 @@ wheels/
 *.egg
 
 # PyInstaller
-*.spec
 *.manifest
 *.pyz
 *.pyz.cached
