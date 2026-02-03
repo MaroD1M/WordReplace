@@ -4,8 +4,18 @@ on:
   push:
     branches: [ main ]
     tags: ['v*.*.*']  # 支持所有语义化版本标签
+    paths:
+      - 'app/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/docker-publish.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+      - '.github/workflows/docker-publish.yml'
 
 env:
   REGISTRY: ghcr.io
