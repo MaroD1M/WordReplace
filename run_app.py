@@ -26,7 +26,7 @@ def open_browser():
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("  Word+Excel 批量替换工具 v1.5.4")
+    print("  Word+Excel 批量替换工具 v1.5.6")
     print("=" * 60)
     print()
     print("正在启动应用...")

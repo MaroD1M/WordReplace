@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.5.4 最终版
+Word+Excel批量替换工具 v1.5.6
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -38,7 +38,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.5.4"
+VERSION = "v1.5.6"
 
 # 页面配置常量
 PAGE_SIZE = 10
