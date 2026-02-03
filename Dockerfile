@@ -47,7 +47,7 @@ COPY app/ ./app/
 # 清理Python环境中不需要的文件
 RUN find /usr/local/lib/python3.10 -name "__pycache__" -type d -exec rm -rf {} + && \
     find /usr/local/lib/python3.10 -name "*.pyc" -delete && \
-    rm -rf /usr/local/lib/python3.10/site-packages/pip /usr/local/lib/python3.10/site-packages/setuptools
+    rm -rf /usr/local/lib/python3.10/site-packages/pip
 
 # 暴露端口
 EXPOSE 8501
