@@ -34,8 +34,6 @@ dist/
 env/
 venv/
 ENV/
-.git
-.github
 readme.md
 deploy.sh
 
