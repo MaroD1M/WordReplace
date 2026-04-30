@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.5.6
+Word+Excel批量替换工具 v1.5.7
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -19,6 +19,7 @@ import unicodedata
 import copy
 from datetime import datetime
 import hashlib
+import logging
 
 # 数据处理库
 import streamlit as st
@@ -38,7 +39,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.5.6"
+VERSION = "v1.5.7"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -48,6 +49,9 @@ MAX_FILENAME_LENGTH = 200
 MAX_WORD_FILE_SIZE = 50 * 1024 * 1024
 MAX_EXCEL_FILE_SIZE = 50 * 1024 * 1024
 MAX_HISTORY_ITEMS = 30
+MAX_RULE_IMPORT_SIZE = 2 * 1024 * 1024
+MAX_RULE_CACHE_ITEMS = 1000
+MAX_EXPORT_FILES = 5000
 
 # ===== 缓存目录管理 =====
 # 获取用户的本地缓存目录（跨平台兼容）
@@ -71,6 +75,8 @@ for directory in [CACHE_BASE_DIR, CACHE_RULES_DIR, CACHE_HISTORY_DIR, CACHE_TEMP
 
 # 过滤警告消息
 warnings.filterwarnings("ignore", category=UserWarning)
+
+logger = logging.getLogger("wordreplace")
 
 # 环境变量配置
 os.environ["STREAMLIT_VERSION"] = "1.51.0"
@@ -460,16 +466,16 @@ def get_cache_info() -> Dict:
             for f in files:
                 file_path = os.path.join(CACHE_RULES_DIR, f)
                 info["total_size"] += os.path.getsize(file_path)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"读取规则缓存统计失败: {e}")
 
     # 统计历史记录
     try:
         if os.path.exists(HISTORY_FILE):
             info["history_count"] = 1
             info["total_size"] += os.path.getsize(HISTORY_FILE)
-    except:
-        pass
+    except Exception as e:
+        logger.warning(f"读取历史缓存统计失败: {e}")
 
     return info
 
@@ -540,10 +546,10 @@ class CacheManager:
             # 生成规范的文件名
             if filename is None:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                filename = f"rule_{timestamp}"
+                filename = sanitize_cache_key(f"rule_{timestamp}")
 
             rules_data = [{"keyword": old, "excel_column": col} for old, col in rules]
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.rules_dir, f"{sanitize_cache_key(filename)}.json")
 
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(rules_data, f, ensure_ascii=False, indent=2)
@@ -564,13 +570,13 @@ class CacheManager:
             规则列表
         """
         try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.rules_dir, f"{sanitize_cache_key(filename)}.json")
             if os.path.exists(cache_file):
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     rules_data = json.load(f)
                     return [(r["keyword"], r["excel_column"]) for r in rules_data]
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"加载规则缓存失败: {e}")
         return []
 
     def get_cached_rules_list(self) -> List[str]:
@@ -592,8 +598,8 @@ class CacheManager:
 
                 files_with_time.sort(key=lambda x: x[1], reverse=True)
                 return [f[0] for f in files_with_time[:30]]
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"读取规则缓存列表失败: {e}")
         return []
 
     def delete_rule(self, filename: str) -> bool:
@@ -607,12 +613,12 @@ class CacheManager:
             是否删除成功
         """
         try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.rules_dir, f"{sanitize_cache_key(filename)}.json")
             if os.path.exists(cache_file):
                 os.remove(cache_file)
                 return True
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"删除规则缓存失败: {e}")
         return False
 
     def get_rule_info(self, filename: str) -> Dict:
@@ -626,7 +632,7 @@ class CacheManager:
             规则文件信息字典（创建时间、大小、规则数）
         """
         try:
-            cache_file = os.path.join(self.rules_dir, f"{filename}.json")
+            cache_file = os.path.join(self.rules_dir, f"{sanitize_cache_key(filename)}.json")
             if os.path.exists(cache_file):
                 stat = os.stat(cache_file)
                 with open(cache_file, 'r', encoding='utf-8') as f:
@@ -638,8 +644,8 @@ class CacheManager:
                     "rules_count": len(rules_data),
                     "mtime": datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
                 }
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"读取规则缓存信息失败: {e}")
         return None
 
     def clear_all_cache(self) -> bool:
@@ -657,8 +663,8 @@ class CacheManager:
                         if os.path.isfile(file_path):
                             os.remove(file_path)
             return True
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"清理缓存失败: {e}")
         return False
 
 
@@ -688,8 +694,8 @@ class HistoryManager:
             history = history[:MAX_HISTORY_ITEMS]
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 json.dump(history, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"写入历史记录失败: {e}")
 
     def load_history(self) -> List[Dict]:
         """加载所有历史记录"""
@@ -697,8 +703,8 @@ class HistoryManager:
             if os.path.exists(self.history_file):
                 with open(self.history_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"读取历史记录失败: {e}")
         return []
 
     def clear_history(self):
@@ -707,8 +713,8 @@ class HistoryManager:
             if os.path.exists(self.history_file):
                 os.remove(self.history_file)
                 st.success("✅ 历史已清除", icon="✅")
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"清除历史记录失败: {e}")
 
 
 # ==================== 会话状态初始化 ====================
@@ -751,8 +757,34 @@ def clean_text(text: str) -> str:
 
 
 def clean_filename(filename: str) -> str:
-    """清理文件名中的非法字符"""
-    return re.sub(r'[\\/:*?"<>|]', "_", str(filename))
+    """清理文件名中的非法字符并规避路径穿越/保留设备名"""
+    name = unicodedata.normalize("NFKC", str(filename))
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", name)
+    name = name.replace("..", "_")
+    name = name.strip().strip(".")
+    if not name:
+        name = "未命名"
+
+    stem, ext = os.path.splitext(name)
+    reserved = {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"}
+    if stem.upper() in reserved:
+        stem = f"_{stem}"
+    return f"{stem}{ext}"
+
+
+def sanitize_cache_key(filename: str) -> str:
+    """限制缓存键名，防止路径注入"""
+    cleaned = re.sub(r'[^A-Za-z0-9_\-]', '_', str(filename))
+    return cleaned[:120] or f"rule_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
+def safe_load_json_bytes(raw: bytes, max_bytes: int = MAX_RULE_IMPORT_SIZE):
+    """安全加载JSON字节，限制体积并校验格式"""
+    if not raw:
+        raise ValueError("空文件")
+    if len(raw) > max_bytes:
+        raise ValueError("文件过大")
+    return json.loads(raw.decode('utf-8'))
 
 
 def generate_safe_filename(
@@ -803,7 +835,8 @@ def generate_safe_filename(
 
         return filename
 
-    except:
+    except Exception as e:
+        logger.warning(f"生成安全文件名失败: {e}")
         return f"文件_{row_idx + 1}.docx"
 
 
@@ -926,9 +959,9 @@ def replace_word_with_format(
         output_file = io.BytesIO()
         doc.save(output_file)
         output_file.seek(0)
-
         if replace_count:
-            log_lines = [f"✓ {old}" for old, _ in replace_count.keys()]
+            # 在日志中携带每个关键字的替换次数，便于后续统计函数准确汇总
+            log_lines = [f"✓ {old}({count}次)" for (old, _), count in replace_count.items()]
             replace_log = ", ".join(log_lines[:3])
             if len(replace_count) > 3:
                 replace_log += f" 等{len(replace_count) - 3}个"
@@ -938,6 +971,7 @@ def replace_word_with_format(
         return output_file, replace_log, total_replace
 
     except Exception as e:
+        logger.warning(f"替换Word失败: {e}")
         return io.BytesIO(), f"❌ 失败", 0
 
 
@@ -975,7 +1009,8 @@ def merge_word_documents(
                 for element in sub_body:
                     main_body.append(copy.deepcopy(element))
 
-            except:
+            except Exception as e:
+                logger.warning(f"合并文档时跳过一个子文档: {e}")
                 continue
 
         output = io.BytesIO()
@@ -984,6 +1019,7 @@ def merge_word_documents(
         return output
 
     except Exception as e:
+        logger.warning(f"合并Word文档失败: {e}")
         raise
 
 
@@ -1022,11 +1058,12 @@ def clean_excel_types(df: pd.DataFrame) -> pd.DataFrame:
             df_clean[col] = df_clean[col].fillna("")
             df_clean[col] = df_clean[col].astype(str).str.strip()
 
-        except:
+        except Exception as e:
+            logger.warning(f"清理Excel列类型失败({col}): {e}")
             try:
                 df_clean[col] = df_clean[col].astype(str).str.strip()
-            except:
-                pass
+            except Exception as inner_e:
+                logger.warning(f"二次清理Excel列类型失败({col}): {inner_e}")
 
     return df_clean
 
@@ -1053,7 +1090,8 @@ def export_statistics_to_csv(replaced_files: List[ReplacedFile]) -> str:
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False, encoding='utf-8-sig')
         return csv_buffer.getvalue()
-    except:
+    except Exception as e:
+        logger.warning(f"导出统计CSV失败: {e}")
         return ""
 
 
@@ -1067,10 +1105,10 @@ def get_keyword_statistics(replace_rules: List[Tuple[str, str]],
     for file in replaced_files:
         for keyword, _ in replace_rules:
             if f"✓ {keyword}" in file.log:
-                pattern = f"✓ {re.escape(keyword)}.*?\((\d+)次\)"
+                pattern = f"✓ {re.escape(keyword)}\\((\\d+)次\\)"
                 matches = re.findall(pattern, file.log)
                 if matches:
-                    stats[keyword] += int(matches[0])
+                    stats[keyword] += sum(int(m) for m in matches)
 
     return stats
 
@@ -1343,8 +1381,8 @@ with col_main_left:
                     finally:
                         try:
                             os.unlink(excel_path)
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"删除Excel临时文件失败: {e}")
 
                 except Exception as e:
                     st.error(f"❌ 读取失败", icon="❌")
@@ -1461,8 +1499,12 @@ with col_main_right:
 
         if import_file:
             try:
-                rules_data = json.load(import_file)
+                rules_data = safe_load_json_bytes(import_file.getvalue())
                 valid_rules = []
+                if not isinstance(rules_data, list):
+                    raise ValueError("规则文件格式错误")
+                if len(rules_data) > MAX_RULE_CACHE_ITEMS:
+                    raise ValueError("规则条数过多")
                 for rule in rules_data:
                     if isinstance(rule, dict) and "keyword" in rule and "excel_column" in rule:
                         keyword = str(rule["keyword"]).strip()
@@ -1477,7 +1519,8 @@ with col_main_right:
 
                 st.success(f"✅ 导入{len(valid_rules)}条", icon="✅")
                 st.rerun()
-            except:
+            except Exception as e:
+                logger.warning(f"导入规则失败: {e}")
                 st.error("❌ 格式错误", icon="❌")
 
         # 导出
@@ -1644,6 +1687,7 @@ if replace_btn and not st.session_state.is_replacing:
                     progress_text.text(f"{idx + 1}/{total_rows}")
 
                 except Exception as e:
+                    logger.warning(f"处理第{row_idx + 1}行失败: {e}")
                     st.session_state.replace_log.append(f"【{row_idx + 1}】❌ 失败")
                     continue
 
@@ -1661,6 +1705,7 @@ if replace_btn and not st.session_state.is_replacing:
             history_manager.add_record(history_record)
 
     except Exception as e:
+        logger.warning(f"批量替换流程失败: {e}")
         st.error(f"❌ 出错", icon="❌")
     finally:
         st.session_state.is_replacing = False
@@ -1719,9 +1764,21 @@ if len(st.session_state.replaced_files) > 0:
 
                 if valid_files:
                     zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                        for file in valid_files:
-                            zipf.writestr(file.filename, file.data.getvalue())
+                    if len(valid_files) > MAX_EXPORT_FILES:
+                        st.error(f"❌ 文件数量过多（>{MAX_EXPORT_FILES}）", icon="❌")
+                    else:
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                            used_names = set()
+                            for file in valid_files:
+                                safe_name = clean_filename(os.path.basename(file.filename))
+                                base, ext = os.path.splitext(safe_name)
+                                candidate = safe_name
+                                idx = 1
+                                while candidate in used_names:
+                                    candidate = f"{base}_{idx}{ext}"
+                                    idx += 1
+                                used_names.add(candidate)
+                                zipf.writestr(candidate, file.data.getvalue())
 
                     zip_buffer.seek(0)
                     zip_filename = f"批量替换_{len(valid_files)}个.zip"
@@ -1736,7 +1793,8 @@ if len(st.session_state.replaced_files) > 0:
                         type="primary",
                         help=HELP_TEXTS["export_zip"]
                     )
-            except:
+            except Exception as e:
+                logger.warning(f"创建ZIP失败: {e}")
                 st.error("❌ 创建ZIP失败", icon="❌")
         else:
             valid_files = [f for f in st.session_state.replaced_files
@@ -1756,7 +1814,8 @@ if len(st.session_state.replaced_files) > 0:
                         type="primary",
                         help=HELP_TEXTS["export_merge"]
                     )
-                except:
+                except Exception as e:
+                    logger.warning(f"合并导出失败: {e}")
                     st.error("❌ 合并失败", icon="❌")
 
     with col_down2:

@@ -4,7 +4,7 @@
 
 ![Banner](assets/banner.svg)
 
-![Version](https://img.shields.io/badge/version-v1.5.6-blue)   ![Python](https://img.shields.io/badge/python-3.10+-green)   ![License](https://img.shields.io/badge/license-MIT-orange)
+![Version](https://img.shields.io/badge/version-v1.5.7-blue)   ![Python](https://img.shields.io/badge/python-3.10+-green)   ![License](https://img.shields.io/badge/license-MIT-orange)
 
 ## 功能特性
 
@@ -15,6 +15,7 @@
 - 历史记录：自动记录操作历史，便于追踪和回溯
 - 高性能：优化的预览机制，支持大文件处理
 - 跨平台：支持 Windows、Linux、macOS
+- 安全加固：文件名安全清洗、规则导入大小/条数限制、ZIP 导出防异常路径与重名冲突
 
 ## 快速开始
 
@@ -69,7 +70,7 @@ docker run -d \
   -p 12344:8501 \
   -e STREAMLIT_SERVER_HEADLESS=true \
   -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-  ghcr.io/MaroD1M/WordReplace:v1.5.6
+  ghcr.io/MaroD1M/WordReplace:v1.5.7
 ```
 
 ### 方式三：群晖 Docker 部署
@@ -83,7 +84,7 @@ docker run -d \
 打开 **Docker** -> **注册表**，搜索并下载镜像：
 
 - 镜像名称：`ghcr.io/MaroD1M/WordReplace`
-- 标签：`latest` 或 `v1.5.6`
+- 标签：`latest` 或 `v1.5.7`
 
 #### 3. 创建容器
 
@@ -231,6 +232,7 @@ streamlit run app/main.py
 - **保存到缓存**：快速保存规则到本地缓存，下次可以快速加载使用
 - **撤销**：撤销最后一次规则操作（添加、删除等）
 - **清空规则**：清空所有已添加的替换规则
+- **导入限制**：JSON 导入文件大小默认不超过 2MB，规则条数默认不超过 1000 条
 
 #### 历史记录
 
@@ -325,10 +327,10 @@ docker push ghcr.io/你的用户名/word-replace:latest
 
    ```bash
    # 创建标签（使用语义化版本号）
-   git tag -a v1.5.6 -m "Release v1.5.6 - 版本描述"
+   git tag -a v1.5.7 -m "Release v1.5.7 - 版本描述"
 
    # 推送标签到远程仓库
-   git push origin v1.5.6
+   git push origin v1.5.7
    ```
 
 3. **等待自动构建完成**
@@ -350,7 +352,7 @@ docker push ghcr.io/你的用户名/word-replace:latest
 - **修订号（Patch）**：向下兼容的问题修正
 
 示例：
-- `v1.5.6` - 修订版本（Bug 修复）
+- `v1.5.7` - 修订版本（Bug 修复）
 - `v1.6.0` - 次版本（新增功能）
 - `v2.0.0` - 主版本（重大更新）
 
@@ -360,7 +362,7 @@ docker push ghcr.io/你的用户名/word-replace:latest
 
 1. 进入你的仓库 -> **Settings** -> **Actions** -> **General**
 2. 在 **Workflow permissions** 中选择 **Read and write permissions**
-3. 提交代码或创建标签（如 `v1.5.6`）会自动触发构建
+3. 提交代码或创建标签（如 `v1.5.7`）会自动触发构建
 4. 构建完成后，镜像会自动推送到你的 GitHub Container Registry
 
 使用自动构建的镜像：
@@ -439,6 +441,13 @@ A: 建议定期：
 - **容器化**：Docker
 - **CI/CD**：GitHub Actions
 
+## 安全说明
+
+- 导出文件名会自动清洗非法字符，并规避路径穿越风险（如 `..`）。
+- 缓存规则文件名会进行安全过滤，避免异常路径写入。
+- 规则导入会校验 JSON 内容并限制体积与条目数，防止异常大文件导致卡顿。
+- ZIP 导出会自动处理重名文件并限制最大导出数量（默认 5000）。
+
 ## 下载
 
 ### Docker 用户
@@ -462,15 +471,14 @@ WordReplace/
 ├── requirements.txt         # Python 依赖
 ├── Dockerfile              # Docker 镜像构建文件
 ├── docker-compose.yml      # Docker Compose 配置
-├── .github/
-│   └── workflows/
-│       └── docker-publish.yml  # GitHub Actions 配置
 └── README.md               # 项目说明文档
 ```
 
+> 说明：本仓库已内置 GitHub Actions 自动构建工作流：`.github/workflows/docker-publish.yml`。
+
 ## 版本历史
 
-- **v1.5.6** - 优化部署流程，专注于 Docker 容器化部署
+- **v1.5.7** - 优化部署流程，专注于 Docker 容器化部署
 - **v1.5.4** - 最终版：规范的缓存管理、高性能预览、全面 Bug 修复
 - **v1.2.4** - 初始版本
 

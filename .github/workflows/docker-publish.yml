@@ -1,9 +1,10 @@
 name: Build and Push Docker Image
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
-    tags: ['v*.*.*']  # 支持所有语义化版本标签
+    tags: [ 'v*.*.*' ]
     paths:
       - 'app/**'
       - 'requirements.txt'
@@ -22,7 +23,22 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Syntax check
+        run: python -m py_compile app/main.py
+
   build-and-push:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,4 +80,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64  # 添加多平台支持
+          platforms: linux/amd64,linux/arm64
