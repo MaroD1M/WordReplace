@@ -4,7 +4,7 @@
 
 ![Banner](assets/banner.svg)
 
-![Version](https://img.shields.io/badge/version-v1.5.7-blue)   ![Python](https://img.shields.io/badge/python-3.10+-green)   ![License](https://img.shields.io/badge/license-MIT-orange)
+![Version](https://img.shields.io/badge/version-v1.5.8-blue)   ![Python](https://img.shields.io/badge/python-3.10+-green)   ![License](https://img.shields.io/badge/license-MIT-orange)
 
 ## 功能特性
 
@@ -70,7 +70,7 @@ docker run -d \
   -p 12344:8501 \
   -e STREAMLIT_SERVER_HEADLESS=true \
   -e STREAMLIT_BROWSER_GATHER_USAGE_STATS=false \
-  ghcr.io/MaroD1M/WordReplace:v1.5.7
+  ghcr.io/MaroD1M/WordReplace:v1.5.8
 ```
 
 ### 方式三：群晖 Docker 部署
@@ -84,7 +84,7 @@ docker run -d \
 打开 **Docker** -> **注册表**，搜索并下载镜像：
 
 - 镜像名称：`ghcr.io/MaroD1M/WordReplace`
-- 标签：`latest` 或 `v1.5.7`
+- 标签：`latest` 或 `v1.5.8`
 
 #### 3. 创建容器
 
@@ -327,10 +327,10 @@ docker push ghcr.io/你的用户名/word-replace:latest
 
    ```bash
    # 创建标签（使用语义化版本号）
-   git tag -a v1.5.7 -m "Release v1.5.7 - 版本描述"
+   git tag -a v1.5.8 -m "Release v1.5.8 - 版本描述"
 
    # 推送标签到远程仓库
-   git push origin v1.5.7
+   git push origin v1.5.8
    ```
 
 3. **等待自动构建完成**
@@ -352,7 +352,7 @@ docker push ghcr.io/你的用户名/word-replace:latest
 - **修订号（Patch）**：向下兼容的问题修正
 
 示例：
-- `v1.5.7` - 修订版本（Bug 修复）
+- `v1.5.8` - 修订版本（Bug 修复）
 - `v1.6.0` - 次版本（新增功能）
 - `v2.0.0` - 主版本（重大更新）
 
@@ -362,7 +362,7 @@ docker push ghcr.io/你的用户名/word-replace:latest
 
 1. 进入你的仓库 -> **Settings** -> **Actions** -> **General**
 2. 在 **Workflow permissions** 中选择 **Read and write permissions**
-3. 提交代码或创建标签（如 `v1.5.7`）会自动触发构建
+3. 提交代码或创建标签（如 `v1.5.8`）会自动触发构建
 4. 构建完成后，镜像会自动推送到你的 GitHub Container Registry
 
 使用自动构建的镜像：
@@ -478,7 +478,7 @@ WordReplace/
 
 ## 版本历史
 
-- **v1.5.7** - 优化部署流程，专注于 Docker 容器化部署
+- **v1.5.8** - 优化部署流程，专注于 Docker 容器化部署
 - **v1.5.4** - 最终版：规范的缓存管理、高性能预览、全面 Bug 修复
 - **v1.2.4** - 初始版本
 

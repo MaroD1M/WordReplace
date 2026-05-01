@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.5.7
+Word+Excel批量替换工具 v1.5.8
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -39,7 +39,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.5.7"
+VERSION = "v1.5.8"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -728,7 +728,7 @@ def init_session_state():
         "is_replacing": False,
         "replace_params": {},
         "replace_scope": "替换完整关键词",
-        "export_mode_radio": "独立文件（ZIP压缩）",
+        "export_mode_radio": "独立文件（ZIP）",
         "undo_stack": [],
         "rule_filter": "",
         "show_advanced": False,
@@ -1764,6 +1764,7 @@ if len(st.session_state.replaced_files) > 0:
 
                 if valid_files:
                     zip_buffer = io.BytesIO()
+                    zip_ready = False
                     if len(valid_files) > MAX_EXPORT_FILES:
                         st.error(f"❌ 文件数量过多（>{MAX_EXPORT_FILES}）", icon="❌")
                     else:
@@ -1779,20 +1780,23 @@ if len(st.session_state.replaced_files) > 0:
                                     idx += 1
                                 used_names.add(candidate)
                                 zipf.writestr(candidate, file.data.getvalue())
+                        zip_ready = True
 
-                    zip_buffer.seek(0)
-                    zip_filename = f"批量替换_{len(valid_files)}个.zip"
+                    if zip_ready:
+                        zip_buffer.seek(0)
+                        zip_filename = f"批量替换_{len(valid_files)}个.zip"
 
-                    st.download_button(
-                        label=f"📦 下载ZIP（{len(valid_files)}个）",
-                        data=zip_buffer,
-                        file_name=zip_filename,
-                        mime="application/zip",
-                        key="download_all_zip",
-                        use_container_width=True,
-                        type="primary",
-                        help=HELP_TEXTS["export_zip"]
-                    )
+                        st.download_button(
+                            label=f"📦 下载ZIP（{len(valid_files)}个）",
+                            data=zip_buffer,
+                            file_name=zip_filename,
+                            mime="application/zip",
+                            key="download_all_zip",
+                            on_click="ignore",
+                            use_container_width=True,
+                            type="primary",
+                            help=HELP_TEXTS["export_zip"]
+                        )
             except Exception as e:
                 logger.warning(f"创建ZIP失败: {e}")
                 st.error("❌ 创建ZIP失败", icon="❌")
@@ -1810,6 +1814,7 @@ if len(st.session_state.replaced_files) > 0:
                         file_name="合并结果.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="download_merged",
+                        on_click="ignore",
                         use_container_width=True,
                         type="primary",
                         help=HELP_TEXTS["export_merge"]
@@ -1828,6 +1833,7 @@ if len(st.session_state.replaced_files) > 0:
                 file_name="统计.csv",
                 mime="text/csv",
                 key="download_stats",
+                on_click="ignore",
                 use_container_width=True
             )
 
@@ -1840,6 +1846,7 @@ if len(st.session_state.replaced_files) > 0:
                 file_name="替换日志.txt",
                 mime="text/plain",
                 key="download_log",
+                on_click="ignore",
                 use_container_width=True,
                 help=HELP_TEXTS["export_log"]
             )
@@ -1911,6 +1918,7 @@ if len(st.session_state.replaced_files) > 0:
                 file_name=file.filename,
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"download_{idx}",
+                on_click="ignore",
                 disabled=not is_valid,
                 use_container_width=True,
                 help=HELP_TEXTS["single_download"]
