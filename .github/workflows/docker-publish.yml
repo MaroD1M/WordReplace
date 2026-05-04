@@ -50,7 +50,9 @@ jobs:
         run: python -m py_compile app/main.py app/core_utils.py app/services.py
 
       - name: Run tests
-        run: pytest -q tests
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests
 
   build-and-push:
     needs: validate
