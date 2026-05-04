@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Scan staged changes for common secret patterns before commit.
+PATTERNS=(
+  'AKIA[0-9A-Z]{16}'
+  'ASIA[0-9A-Z]{16}'
+  'ghp_[A-Za-z0-9]{36}'
+  'github_pat_[A-Za-z0-9_]{20,}'
+  'xox[baprs]-[A-Za-z0-9-]{10,}'
+  'sk-[A-Za-z0-9]{20,}'
+  'AIza[0-9A-Za-z\-_]{35}'
+  'BEGIN [A-Z ]*PRIVATE KEY'
+)
+
+FILES=$(git diff --cached --name-only --diff-filter=ACMR)
+if [ -z "$FILES" ]; then
+  exit 0
+fi
+
+status=0
+for f in $FILES; do
+  [ -f "$f" ] || continue
+  # Skip lock files and binaries from text scan
+  case "$f" in
+    *.lock|*.png|*.jpg|*.jpeg|*.gif|*.pdf|*.docx|*.xlsx|*.zip) continue ;;
+  esac
+
+  patch=$(git diff --cached -- "$f" | sed -n 's/^+//p')
+  for pat in "${PATTERNS[@]}"; do
+    if printf '%s
+' "$patch" | rg -n --pcre2 "$pat" >/dev/null 2>&1; then
+      echo "[pre-commit] Potential secret detected in staged changes: $f"
+      echo "[pre-commit] Pattern: $pat"
+      status=1
+    fi
+  done
+done
+
+if [ "$status" -ne 0 ]; then
+  echo "[pre-commit] Commit blocked. Remove secret or use secure secret injection."
+  exit 1
+fi
+
+exit 0

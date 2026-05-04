@@ -49,3 +49,24 @@ Thumbs.db
 # Docker
 .docker/
 
+
+# Security: local secrets and credentials
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.kubeconfig
+*.ovpn
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+secrets.*
+credentials.*
+*.secret
+
+# Local hook artifacts
+.githooks/_logs/
