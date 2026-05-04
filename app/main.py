@@ -110,7 +110,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 logger = logging.getLogger("wordreplace")
 
 # 环境变量配置
-os.environ["STREAMLIT_VERSION"] = "1.51.0"
+os.environ["STREAMLIT_VERSION"] = "1.52.2"
 os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
 os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
 

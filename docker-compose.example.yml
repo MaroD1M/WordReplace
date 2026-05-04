@@ -6,15 +6,20 @@ services:
     container_name: wordreplace
     restart: unless-stopped
     ports:
-      - "12344:8501"
+      - "8501:8501"
     environment:
       STREAMLIT_SERVER_HEADLESS: "true"
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
-      STREAMLIT_SERVER_MAX_UPLOAD_SIZE: "50"
-      STREAMLIT_SERVER_ENABLE_CORS: "false"
+      STREAMLIT_SERVER_MAX_UPLOAD_SIZE: "100"
+      TZ: "UTC"
+    volumes:
+      - wordreplace_cache:/home/app/.cache/batch_replacer
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8501/_stcore/health', timeout=5).raise_for_status()"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+
+volumes:
+  wordreplace_cache:
