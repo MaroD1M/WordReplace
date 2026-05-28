@@ -10,6 +10,8 @@
 
 `WordReplace` 用于将 **Word 模板（.docx）** 与 **Excel 数据（.xlsx）** 自动批量合成目标文档，适合通知书、合同、证书、名册等场景。
 
+![WordReplace UI 预览](docs/images/ui-overview.png)
+
 ### ✅ 你能得到什么
 
 - 🔁 批量替换关键字（段落 + 表格）
