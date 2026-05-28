@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.6.5
+Word+Excel批量替换工具 v1.6.6
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -70,7 +70,7 @@ except ImportError:
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.6.5"
+VERSION = "v1.6.6"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -149,7 +149,7 @@ st.markdown("""
     }
 
     [data-testid="stMainBlockContainer"] {
-        padding-top: 0.5rem !important;
+        padding-top: 1.25rem !important;
         padding-bottom: 0.5rem !important;
     }
 
@@ -515,6 +515,7 @@ HELP_TEXTS = {
     "start_replace": "开始执行批量替换操作，需要：1.选择文件 2.添加规则 3.设置行范围",
     "export_zip": "将所有替换后的文件保存为一个ZIP压缩包，便于统一下载",
     "export_merge": "将所有替换后的文件合并为一个Word文档，每个文件占一页",
+    "merge_mode": "合并模式：智能推荐分节分隔（复杂多页模板），也可选择分页或连续拼接",
     "export_stats": "导出替换统计数据为CSV格式，包含文件名、行号、替换次数等",
     "export_log": "导出详细的替换操作日志为TXT文件，记录每一行的替换情况",
     "rule_list": "显示已添加的所有替换规则，可以删除不需要的规则或撤销操作",
@@ -994,11 +995,8 @@ with st.sidebar:
             st.rerun()
 
 # ==================== 主页面 - 标题 ====================
-col_title_main, col_title_ver = st.columns([8, 2])
-with col_title_main:
-    st.title("📋 Word+Excel批量替换工具")
-with col_title_ver:
-    st.caption(VERSION)
+st.title("📋 Word+Excel批量替换工具")
+st.caption(VERSION)
 st.markdown(
     "<p class='wr-subtitle'>上传模板与数据表，配置规则后即可批量生成目标文档。</p>",
     unsafe_allow_html=True,
@@ -1565,6 +1563,16 @@ if len(st.session_state.replaced_files) > 0:
         label_visibility="collapsed"
     )
 
+    merge_mode_label = "分节分隔（复杂模板推荐）"
+    if export_mode == "合并为单个文档":
+        merge_mode_label = st.selectbox(
+            "合并模式",
+            options=["分页分隔（默认）", "分节分隔（复杂模板推荐）", "连续合并（无分页）"],
+            index=1,
+            key="merge_mode_select",
+            help=HELP_TEXTS["merge_mode"]
+        )
+
     st.markdown("---")
 
     # 统计信息（保留规则数，其他核心摘要已上移）
@@ -1629,7 +1637,15 @@ if len(st.session_state.replaced_files) > 0:
 
             if valid_files:
                 try:
-                    merged_data = merge_word_documents(valid_files)
+                    merge_mode_map = {
+                        "分页分隔（默认）": "page_break",
+                        "分节分隔（复杂模板推荐）": "section_break",
+                        "连续合并（无分页）": "continuous",
+                    }
+                    merged_data = merge_word_documents(
+                        valid_files,
+                        merge_mode=merge_mode_map.get(merge_mode_label, "page_break")
+                    )
 
                     st.download_button(
                         label=f"📋 下载合并文档（{len(valid_files)}个）",
@@ -1648,11 +1664,12 @@ if len(st.session_state.replaced_files) > 0:
 
     with col_down2:
         csv_data = export_statistics_to_csv(st.session_state.replaced_files)
+        csv_bytes = csv_data.encode("utf-8-sig")
         st.download_button(
             label="📊 下载CSV统计",
-            data=csv_data,
+            data=csv_bytes,
             file_name="统计.csv",
-            mime="text/csv",
+            mime="text/csv; charset=utf-8",
             key="download_stats",
             on_click="ignore",
             use_container_width=True,
@@ -1662,11 +1679,12 @@ if len(st.session_state.replaced_files) > 0:
     with col_down3:
         if st.session_state.replace_log:
             log_text = "\n".join(st.session_state.replace_log)
+            log_bytes = log_text.encode("utf-8-sig")
             st.download_button(
                 label="📝 导出日志",
-                data=log_text,
+                data=log_bytes,
                 file_name="替换日志.txt",
-                mime="text/plain",
+                mime="text/plain; charset=utf-8",
                 key="download_log",
                 on_click="ignore",
                 use_container_width=True,
@@ -1679,28 +1697,61 @@ if len(st.session_state.replaced_files) > 0:
     st.markdown(create_tooltip(f"**文件列表** ({len(st.session_state.replaced_files)})", "rule_list"),
                 unsafe_allow_html=True)
 
-    # 分页
-    total_pages = (len(st.session_state.replaced_files) + PAGE_SIZE - 1) // PAGE_SIZE
-
-    col_page1, col_page2, col_page3 = st.columns([2, 1, 2])
-
-    with col_page2:
-        current_page_safe = min(max(1, int(st.session_state.current_page)), total_pages)
-        st.session_state.current_page = current_page_safe
-        st.number_input(
-            "页",
-            min_value=1,
-            max_value=total_pages,
-            key="current_page",
-            label_visibility="collapsed"
+    # 筛选与搜索
+    col_filter1, col_filter2 = st.columns([1, 2], gap="small")
+    with col_filter1:
+        status_filter = st.selectbox(
+            "状态筛选",
+            options=["全部", "仅成功", "仅失败"],
+            key="result_status_filter"
         )
-        current_page = int(st.session_state.current_page)
+    with col_filter2:
+        name_keyword = st.text_input(
+            "文件名搜索",
+            value="",
+            key="result_name_keyword",
+            placeholder="输入文件名关键字",
+            label_visibility="visible"
+        ).strip()
 
-    start_idx = (current_page - 1) * PAGE_SIZE
-    end_idx = min(start_idx + PAGE_SIZE, len(st.session_state.replaced_files))
-    current_files = st.session_state.replaced_files[start_idx:end_idx]
+    filtered_files = []
+    for file in st.session_state.replaced_files:
+        is_valid = bool(file.data and len(file.data.getvalue()) > 0)
+        if status_filter == "仅成功" and not is_valid:
+            continue
+        if status_filter == "仅失败" and is_valid:
+            continue
+        if name_keyword and name_keyword.lower() not in file.filename.lower():
+            continue
+        filtered_files.append(file)
 
-    st.caption(f"第 {current_page}/{total_pages} 页")
+    if not filtered_files:
+        st.info("当前筛选条件下没有匹配文件。", icon="ℹ️")
+        current_files = []
+        start_idx = 0
+    else:
+        # 分页
+        total_pages = (len(filtered_files) + PAGE_SIZE - 1) // PAGE_SIZE
+
+        col_page1, col_page2, col_page3 = st.columns([2, 1, 2])
+
+        with col_page2:
+            current_page_safe = min(max(1, int(st.session_state.current_page)), total_pages)
+            st.session_state.current_page = current_page_safe
+            st.number_input(
+                "页",
+                min_value=1,
+                max_value=total_pages,
+                key="current_page",
+                label_visibility="collapsed"
+            )
+            current_page = int(st.session_state.current_page)
+
+        start_idx = (current_page - 1) * PAGE_SIZE
+        end_idx = min(start_idx + PAGE_SIZE, len(filtered_files))
+        current_files = filtered_files[start_idx:end_idx]
+
+        st.caption(f"第 {current_page}/{total_pages} 页（共 {len(filtered_files)} 条）")
 
     # 文件表格
     file_data = []

@@ -135,8 +135,14 @@ def replace_word_with_format(word_file, excel_row: pd.Series, replace_rules: Lis
         return io.BytesIO(), "❌ 失败", 0
 
 
-def merge_word_documents(replaced_files) -> io.BytesIO:
-    """合并多个Word文档（保留所有格式和结构）。"""
+def merge_word_documents(replaced_files, merge_mode: str = "page_break") -> io.BytesIO:
+    """合并多个Word文档（保留所有格式和结构）。
+
+    merge_mode:
+    - page_break: 使用分页符分隔（默认）
+    - section_break: 使用分节符（下一页）分隔，适合多页复杂模板
+    - continuous: 连续拼接不插入分页/分节
+    """
     if not replaced_files:
         raise ValueError("没有文件")
 
@@ -152,15 +158,27 @@ def merge_word_documents(replaced_files) -> io.BytesIO:
             sub_doc = Document(io.BytesIO(file.data.getvalue()))
             sub_body = sub_doc._body._element
 
-            # Use an explicit page break run instead of pageBreakBefore paragraph.
-            # This avoids introducing an extra blank paragraph at the top of next page.
-            page_break_para = OxmlElement("w:p")
-            page_break_run = OxmlElement("w:r")
-            page_break_element = OxmlElement("w:br")
-            page_break_element.set(qn("w:type"), "page")
-            page_break_run.append(page_break_element)
-            page_break_para.append(page_break_run)
-            main_body.append(page_break_para)
+            if merge_mode == "section_break":
+                # Insert section break (next page) for better isolation of section/page settings.
+                sep_para = OxmlElement("w:p")
+                sep_ppr = OxmlElement("w:pPr")
+                sect_pr = OxmlElement("w:sectPr")
+                sect_type = OxmlElement("w:type")
+                sect_type.set(qn("w:val"), "nextPage")
+                sect_pr.append(sect_type)
+                sep_ppr.append(sect_pr)
+                sep_para.append(sep_ppr)
+                main_body.append(sep_para)
+            elif merge_mode == "page_break":
+                # Use an explicit page break run instead of pageBreakBefore paragraph.
+                # This avoids introducing an extra blank paragraph at the top of next page.
+                page_break_para = OxmlElement("w:p")
+                page_break_run = OxmlElement("w:r")
+                page_break_element = OxmlElement("w:br")
+                page_break_element.set(qn("w:type"), "page")
+                page_break_run.append(page_break_element)
+                page_break_para.append(page_break_run)
+                main_body.append(page_break_para)
 
             for element in sub_body:
                 main_body.append(copy.deepcopy(element))

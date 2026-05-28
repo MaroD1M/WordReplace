@@ -123,3 +123,26 @@ def test_merge_word_documents_does_not_insert_blank_top_paragraph():
     non_empty = [p.text for p in out_doc.paragraphs if p.text.strip()]
     assert "第一页内容" in non_empty
     assert "第二页首行" in non_empty
+
+
+def test_merge_word_documents_supports_continuous_mode():
+    doc1 = Document()
+    doc1.add_paragraph("A")
+    b1 = io.BytesIO()
+    doc1.save(b1)
+
+    doc2 = Document()
+    doc2.add_paragraph("B")
+    b2 = io.BytesIO()
+    doc2.save(b2)
+
+    merged = merge_word_documents(
+        [
+            ReplacedFileLike("a.docx", io.BytesIO(b1.getvalue())),
+            ReplacedFileLike("b.docx", io.BytesIO(b2.getvalue())),
+        ],
+        merge_mode="continuous",
+    )
+    out_doc = Document(io.BytesIO(merged.getvalue()))
+    non_empty = [p.text for p in out_doc.paragraphs if p.text.strip()]
+    assert "A" in non_empty and "B" in non_empty
