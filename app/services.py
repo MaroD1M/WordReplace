@@ -4,6 +4,7 @@ import copy
 import io
 import re
 import hashlib
+import json
 import logging
 from collections import defaultdict
 from typing import Dict, List, Optional, Tuple
@@ -173,6 +174,10 @@ def merge_word_documents(replaced_files) -> io.BytesIO:
 
 def get_replace_params(word_file, excel_df: Optional[pd.DataFrame], start_row: int, end_row: int, file_name_col: str, file_prefix: str, file_suffix: str, replace_rules: List[Tuple[str, str]]) -> Dict:
     """获取替换参数，用于判断是否需要重新替换。"""
+    normalized_rules = [[str(old), str(col)] for old, col in replace_rules]
+    stable_rule_hash = hashlib.sha256(
+        json.dumps(normalized_rules, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()[:16]
     return {
         "word_filename": word_file.name if word_file else "",
         "excel_rows": len(excel_df) if excel_df is not None else 0,
@@ -182,7 +187,7 @@ def get_replace_params(word_file, excel_df: Optional[pd.DataFrame], start_row: i
         "file_prefix": file_prefix,
         "file_suffix": file_suffix,
         "rule_count": len(replace_rules),
-        "rule_hash": hash(tuple(replace_rules)),
+        "rule_hash": stable_rule_hash,
     }
 
 

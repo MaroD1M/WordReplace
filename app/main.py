@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.6.2
+Word+Excel批量替换工具 v1.6.3
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -70,7 +70,7 @@ except ImportError:
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.6.2"
+VERSION = "v1.6.3"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -397,6 +397,70 @@ st.markdown("""
         border: 1px solid #e0e0e0;
         border-radius: 6px;
         background-color: #f9f9f9;
+    }
+
+    /* 顶部流程与上传卡片 */
+    .wr-subtitle {
+        margin: 0.25rem 0 0.4rem 0;
+        color: var(--wr-muted);
+        font-size: 0.95rem;
+    }
+
+    .wr-step {
+        display: block;
+        width: 100%;
+        text-align: center;
+        padding: 0.42rem 0.25rem;
+        border-radius: 999px;
+        border: 1px solid var(--wr-line);
+        background: #f8fafc;
+        color: #475569;
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .wr-step.active {
+        border-color: var(--wr-brand);
+        color: #0f766e;
+        background: var(--wr-brand-soft);
+    }
+
+    .wr-upload-card {
+        border: 1px solid var(--wr-line);
+        border-radius: 10px;
+        padding: 0.55rem 0.65rem;
+        background: #fcfefe;
+        min-height: 130px;
+    }
+
+    .wr-upload-help {
+        color: var(--wr-muted);
+        font-size: 0.78rem;
+        margin-top: 0.2rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .wr-rule-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+        padding: 0.35rem 0.45rem;
+        border: 1px solid var(--wr-line);
+        border-radius: 8px;
+        background: #f8fafc;
+        font-size: 0.8rem;
+        color: #475569;
+    }
+
+    .wr-rule-item {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.82rem;
+        color: #1f2937;
     }
 
     /* 响应式设计 */
@@ -910,19 +974,26 @@ with st.sidebar:
             st.rerun()
 
 # ==================== 主页面 - 标题 ====================
-col_title1, col_title2 = st.columns([8, 2])
-with col_title1:
-    st.title("📋 Word+Excel批量替换工具")
-with col_title2:
-    st.markdown(
-        f"<div style='text-align: right; padding-top: 5px;'><small style='color: #999;'>v{VERSION}</small></div>",
-        unsafe_allow_html=True)
+st.markdown(
+    f"""
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:0.75rem;flex-wrap:wrap;">
+      <h1 style="margin:0;line-height:1.25;word-break:break-word;">📋 Word+Excel批量替换工具</h1>
+      <small style="color:#64748b;white-space:nowrap;">{VERSION}</small>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown(
+    "<p class='wr-subtitle'>上传模板与数据表，配置规则后即可批量生成目标文档。</p>",
+    unsafe_allow_html=True,
+)
 
 step_cols = st.columns(5)
 step_labels = ["1 上传文件", "2 预览数据", "3 配置规则", "4 执行替换", "5 下载结果"]
 for idx, label in enumerate(step_labels):
     with step_cols[idx]:
-        st.caption(f"`{label}`")
+        step_cls = "wr-step active" if idx == 0 else "wr-step"
+        st.markdown(f"<span class='{step_cls}'>{label}</span>", unsafe_allow_html=True)
 
 # 进度显示
 if st.session_state.replaced_files and st.session_state.replace_params:
@@ -948,7 +1019,9 @@ with col_main_left:
     col_upload1, col_upload2 = st.columns(2, gap="small")
 
     with col_upload1:
+        st.markdown("<div class='wr-upload-card'>", unsafe_allow_html=True)
         st.markdown(create_tooltip("**Word模板**", "word_upload"), unsafe_allow_html=True)
+        st.markdown("<p class='wr-upload-help'>支持 .docx，建议使用标准占位符格式。</p>", unsafe_allow_html=True)
 
         word_file = st.file_uploader(
             "选择文件",
@@ -965,10 +1038,13 @@ with col_main_left:
                 st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
                 word_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.success(f"已加载：{word_file.name}（{file_size_str}）", icon="✅")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     with col_upload2:
+        st.markdown("<div class='wr-upload-card'>", unsafe_allow_html=True)
         st.markdown(create_tooltip("**Excel数据**", "excel_upload"), unsafe_allow_html=True)
+        st.markdown("<p class='wr-upload-help'>支持 .xlsx，首行建议为字段名。</p>", unsafe_allow_html=True)
 
         excel_file = st.file_uploader(
             "选择文件",
@@ -985,7 +1061,8 @@ with col_main_left:
                 st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
                 excel_file = None
             else:
-                st.caption(f"✅ {file_size_str}")
+                st.success(f"已加载：{excel_file.name}（{file_size_str}）", icon="✅")
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -1097,22 +1174,28 @@ with col_main_right:
     st.markdown("---")
 
     # 规则列表
-    st.markdown(create_tooltip(f"**规则列表** ({len(st.session_state.replace_rules)})", "rule_list"),
-                unsafe_allow_html=True)
+    st.markdown(create_tooltip("**规则列表**", "rule_list"), unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='wr-rule-toolbar'><span>共 {len(st.session_state.replace_rules)} 条规则</span><span>支持撤销与批量导入</span></div>",
+        unsafe_allow_html=True,
+    )
 
     if st.session_state.replace_rules:
         with st.container(border=True):
             for idx, (old, col) in enumerate(st.session_state.replace_rules):
-                col_del, col_rule = st.columns([0.5, 3], gap="small")
+                col_rule, col_del = st.columns([3, 0.6], gap="small")
+                rule_preview = f"{old} → {col}"
                 with col_del:
-                    if st.button("❌", key=f"del_{idx}", use_container_width=True,
-                                 help="删除此规则"):
+                    if st.button("删除", key=f"del_{idx}", use_container_width=True, help="删除此规则"):
                         st.session_state.undo_stack.append(st.session_state.replace_rules.copy())
                         st.session_state.replace_rules.pop(idx)
                         st.session_state.replaced_files = []
                         st.rerun()
                 with col_rule:
-                    st.caption(f"**{old[:12]}** → {col[:12]}")
+                    st.markdown(
+                        f"<span class='wr-rule-item' title='{rule_preview}'><strong>{old}</strong> → {col}</span>",
+                        unsafe_allow_html=True,
+                    )
 
         # 规则操作按钮
         col_undo, col_clear = st.columns(2, gap="small")
@@ -1326,6 +1409,18 @@ need_replace = (
         st.session_state.replace_params != current_params
 )
 
+# 执行前摘要卡
+planned_total = 0
+if excel_df is not None and len(excel_df) > 0 and start_row <= end_row:
+    planned_total = max(0, min(int(end_row), len(excel_df)) - int(start_row) + 1)
+summary_col1, summary_col2, summary_col3 = st.columns(3, gap="small")
+with summary_col1:
+    st.metric("🧾 预计生成", planned_total)
+with summary_col2:
+    st.metric("📋 当前规则", len(st.session_state.replace_rules))
+with summary_col3:
+    st.metric("📄 行范围", f"{int(start_row)}-{int(end_row)}")
+
 col_exec1, col_exec2, col_exec3, col_exec4 = st.columns([2, 1.5, 1.5, 1], gap="small")
 
 with col_exec1:
@@ -1428,6 +1523,21 @@ st.markdown("---")
 if len(st.session_state.replaced_files) > 0:
     st.subheader("💾 下载结果")
 
+    # 摘要优先展示
+    success_count = len([f for f in st.session_state.replaced_files if f.data and len(f.data.getvalue()) > 0])
+    total_count = len(st.session_state.replaced_files)
+    fail_count = max(0, total_count - success_count)
+    total_replace = sum(f.replace_count for f in st.session_state.replaced_files)
+    sum_col1, sum_col2, sum_col3, sum_col4 = st.columns(4, gap="small")
+    with sum_col1:
+        st.metric("📄 总数", total_count)
+    with sum_col2:
+        st.metric("✅ 成功", success_count)
+    with sum_col3:
+        st.metric("❌ 失败", fail_count)
+    with sum_col4:
+        st.metric("🔄 替换次", total_replace)
+
     col_export_opt1, col_export_opt2 = st.columns([2, 2])
 
     with col_export_opt1:
@@ -1443,23 +1553,12 @@ if len(st.session_state.replaced_files) > 0:
 
     st.markdown("---")
 
-    # 统计信息
-    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4, gap="small")
-
+    # 统计信息（保留规则数，其他核心摘要已上移）
+    col_stat1, col_stat2 = st.columns(2, gap="small")
     with col_stat1:
-        st.metric("📄 总数", len(st.session_state.replaced_files))
-
-    with col_stat2:
-        success_count = len([f for f in st.session_state.replaced_files
-                             if f.data and len(f.data.getvalue()) > 0])
-        st.metric("✅ 成功", success_count)
-
-    with col_stat3:
-        total_replace = sum(f.replace_count for f in st.session_state.replaced_files)
-        st.metric("🔄 替换次", total_replace)
-
-    with col_stat4:
         st.metric("📋 规则数", len(st.session_state.replace_rules))
+    with col_stat2:
+        st.metric("📈 成功率", f"{int(success_count / total_count * 100) if total_count > 0 else 0}%")
 
     st.markdown("---")
 
