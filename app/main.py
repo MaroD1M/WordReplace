@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.6.4
+Word+Excel批量替换工具 v1.6.5
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -70,7 +70,7 @@ except ImportError:
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.6.4"
+VERSION = "v1.6.5"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -203,7 +203,7 @@ st.markdown("""
     }
 
     /* ===== 标题和文字样式 ===== */
-    h1 {
+    [data-testid="stAppViewContainer"] h1 {
         padding-bottom: 0.5rem;
         border-bottom: 2px solid var(--wr-brand);
         margin-bottom: 0.5rem;
@@ -211,14 +211,14 @@ st.markdown("""
         letter-spacing: 0.01em;
     }
 
-    h2 {
+    [data-testid="stAppViewContainer"] h2 {
         margin-top: 0.5rem;
         margin-bottom: 0.3rem;
         color: var(--wr-brand);
         font-size: 1.2rem;
     }
 
-    h3 {
+    [data-testid="stAppViewContainer"] h3 {
         margin-top: 0.3rem;
         margin-bottom: 0.2rem;
         color: #333;
@@ -297,7 +297,7 @@ st.markdown("""
     }
 
     /* ===== 分隔线 ===== */
-    hr {
+    [data-testid="stAppViewContainer"] hr {
         margin: 0.5rem 0 !important;
         border: none;
         border-top: 1px solid #e0e0e0;
@@ -324,11 +324,12 @@ st.markdown("""
     }
 
     /* ===== 表格样式 ===== */
-    table {
+    [data-testid="stAppViewContainer"] table {
         font-size: 12px !important;
     }
 
-    td, th {
+    [data-testid="stAppViewContainer"] td,
+    [data-testid="stAppViewContainer"] th {
         padding: 0.4rem !important;
     }
 
@@ -416,8 +417,9 @@ st.markdown("""
     }
 
     .wr-step {
-        display: block;
-        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         text-align: center;
         padding: 0.42rem 0.25rem;
         border-radius: 999px;
@@ -426,7 +428,16 @@ st.markdown("""
         color: #475569;
         font-size: 0.78rem;
         font-weight: 600;
-        white-space: nowrap;
+        white-space: normal;
+        min-width: 116px;
+        flex: 1 1 116px;
+    }
+
+    .wr-steps-wrap {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin: 0.3rem 0 0.1rem 0;
     }
 
     .wr-step.active {
@@ -983,26 +994,22 @@ with st.sidebar:
             st.rerun()
 
 # ==================== 主页面 - 标题 ====================
-st.markdown(
-    f"""
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-      <div class="wr-title">📋 Word+Excel批量替换工具</div>
-      <small style="color:#64748b;white-space:nowrap;">{VERSION}</small>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+col_title_main, col_title_ver = st.columns([8, 2])
+with col_title_main:
+    st.title("📋 Word+Excel批量替换工具")
+with col_title_ver:
+    st.caption(VERSION)
 st.markdown(
     "<p class='wr-subtitle'>上传模板与数据表，配置规则后即可批量生成目标文档。</p>",
     unsafe_allow_html=True,
 )
 
-step_cols = st.columns(5)
 step_labels = ["1 上传文件", "2 预览数据", "3 配置规则", "4 执行替换", "5 下载结果"]
+step_html = []
 for idx, label in enumerate(step_labels):
-    with step_cols[idx]:
-        step_cls = "wr-step active" if idx == 0 else "wr-step"
-        st.markdown(f"<span class='{step_cls}'>{label}</span>", unsafe_allow_html=True)
+    step_cls = "wr-step active" if idx == 0 else "wr-step"
+    step_html.append(f"<span class='{step_cls}'>{label}</span>")
+st.markdown(f"<div class='wr-steps-wrap'>{''.join(step_html)}</div>", unsafe_allow_html=True)
 
 # 进度显示
 if st.session_state.replaced_files and st.session_state.replace_params:
@@ -1678,15 +1685,16 @@ if len(st.session_state.replaced_files) > 0:
     col_page1, col_page2, col_page3 = st.columns([2, 1, 2])
 
     with col_page2:
-        st.session_state.current_page = min(max(1, int(st.session_state.current_page)), total_pages)
-        current_page = st.number_input(
+        current_page_safe = min(max(1, int(st.session_state.current_page)), total_pages)
+        st.session_state.current_page = current_page_safe
+        st.number_input(
             "页",
             min_value=1,
             max_value=total_pages,
-            value=st.session_state.current_page,
             key="current_page",
             label_visibility="collapsed"
         )
+        current_page = int(st.session_state.current_page)
 
     start_idx = (current_page - 1) * PAGE_SIZE
     end_idx = min(start_idx + PAGE_SIZE, len(st.session_state.replaced_files))
