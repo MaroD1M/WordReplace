@@ -152,12 +152,14 @@ def merge_word_documents(replaced_files) -> io.BytesIO:
             sub_doc = Document(io.BytesIO(file.data.getvalue()))
             sub_body = sub_doc._body._element
 
+            # Use an explicit page break run instead of pageBreakBefore paragraph.
+            # This avoids introducing an extra blank paragraph at the top of next page.
             page_break_para = OxmlElement("w:p")
-            page_break_pPr = OxmlElement("w:pPr")
-            page_break_element = OxmlElement("w:pageBreakBefore")
-            page_break_element.set(qn("w:val"), "1")
-            page_break_pPr.append(page_break_element)
-            page_break_para.append(page_break_pPr)
+            page_break_run = OxmlElement("w:r")
+            page_break_element = OxmlElement("w:br")
+            page_break_element.set(qn("w:type"), "page")
+            page_break_run.append(page_break_element)
+            page_break_para.append(page_break_run)
             main_body.append(page_break_para)
 
             for element in sub_body:

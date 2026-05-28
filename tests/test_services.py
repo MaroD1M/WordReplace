@@ -8,6 +8,7 @@ from app.services import (
     clean_excel_types,
     get_replace_params,
     export_statistics_to_csv,
+    merge_word_documents,
     replace_word_with_format,
 )
 
@@ -63,6 +64,12 @@ class UploadLike:
         return self._data
 
 
+class ReplacedFileLike:
+    def __init__(self, filename: str, data: io.BytesIO):
+        self.filename = filename
+        self.data = data
+
+
 def test_replace_word_with_format_replaces_across_runs():
     doc = Document()
     p = doc.add_paragraph()
@@ -94,3 +101,25 @@ def test_replace_word_with_format_replaces_table_cell_text():
     out_doc = Document(io.BytesIO(out_file.getvalue()))
     assert "〔研发〕" in out_doc.tables[0].cell(0, 0).text
     assert count == 1
+
+
+def test_merge_word_documents_does_not_insert_blank_top_paragraph():
+    doc1 = Document()
+    doc1.add_paragraph("第一页内容")
+    b1 = io.BytesIO()
+    doc1.save(b1)
+
+    doc2 = Document()
+    doc2.add_paragraph("第二页首行")
+    b2 = io.BytesIO()
+    doc2.save(b2)
+
+    merged = merge_word_documents([
+        ReplacedFileLike("a.docx", io.BytesIO(b1.getvalue())),
+        ReplacedFileLike("b.docx", io.BytesIO(b2.getvalue())),
+    ])
+
+    out_doc = Document(io.BytesIO(merged.getvalue()))
+    non_empty = [p.text for p in out_doc.paragraphs if p.text.strip()]
+    assert "第一页内容" in non_empty
+    assert "第二页首行" in non_empty

@@ -1,5 +1,5 @@
 """
-Word+Excel批量替换工具 v1.6.3
+Word+Excel批量替换工具 v1.6.4
 功能：Word模板与Excel数据批量替换，保留格式，支持合并导出
 特性：规范的缓存管理、高性能预览、全面Bug修复
 """
@@ -70,7 +70,7 @@ except ImportError:
 
 # ==================== 配置和常量 ====================
 
-VERSION = "v1.6.3"
+VERSION = "v1.6.4"
 
 # 页面配置常量
 PAGE_SIZE = 10
@@ -404,6 +404,15 @@ st.markdown("""
         margin: 0.25rem 0 0.4rem 0;
         color: var(--wr-muted);
         font-size: 0.95rem;
+    }
+
+    .wr-title {
+        margin: 0;
+        line-height: 1.3;
+        font-size: 1.9rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: var(--wr-ink);
     }
 
     .wr-step {
@@ -976,8 +985,8 @@ with st.sidebar:
 # ==================== 主页面 - 标题 ====================
 st.markdown(
     f"""
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:0.75rem;flex-wrap:wrap;">
-      <h1 style="margin:0;line-height:1.25;word-break:break-word;">📋 Word+Excel批量替换工具</h1>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+      <div class="wr-title">📋 Word+Excel批量替换工具</div>
       <small style="color:#64748b;white-space:nowrap;">{VERSION}</small>
     </div>
     """,
@@ -1019,55 +1028,53 @@ with col_main_left:
     col_upload1, col_upload2 = st.columns(2, gap="small")
 
     with col_upload1:
-        st.markdown("<div class='wr-upload-card'>", unsafe_allow_html=True)
-        st.markdown(create_tooltip("**Word模板**", "word_upload"), unsafe_allow_html=True)
-        st.markdown("<p class='wr-upload-help'>支持 .docx，建议使用标准占位符格式。</p>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(create_tooltip("**Word模板**", "word_upload"), unsafe_allow_html=True)
+            st.markdown("<p class='wr-upload-help'>支持 .docx，建议使用标准占位符格式。</p>", unsafe_allow_html=True)
 
-        word_file = st.file_uploader(
-            "选择文件",
-            type=["docx"],
-            key="word",
-            label_visibility="collapsed",
-            help="仅支持.docx格式"
-        )
-        if word_file:
-            file_size_bytes = len(word_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
+            word_file = st.file_uploader(
+                "选择文件",
+                type=["docx"],
+                key="word",
+                label_visibility="collapsed",
+                help="仅支持.docx格式"
+            )
+            if word_file:
+                file_size_bytes = len(word_file.getvalue())
+                file_size_str = format_file_size(file_size_bytes)
 
-            if file_size_bytes > MAX_WORD_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
-                word_file = None
-            else:
-                st.success(f"已加载：{word_file.name}（{file_size_str}）", icon="✅")
-        st.markdown("</div>", unsafe_allow_html=True)
+                if file_size_bytes > MAX_WORD_FILE_SIZE:
+                    st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+                    word_file = None
+                else:
+                    st.success(f"已加载：{word_file.name}（{file_size_str}）", icon="✅")
 
     with col_upload2:
-        st.markdown("<div class='wr-upload-card'>", unsafe_allow_html=True)
-        st.markdown(create_tooltip("**Excel数据**", "excel_upload"), unsafe_allow_html=True)
-        st.markdown("<p class='wr-upload-help'>支持 .xlsx，首行建议为字段名。</p>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(create_tooltip("**Excel数据**", "excel_upload"), unsafe_allow_html=True)
+            st.markdown("<p class='wr-upload-help'>支持 .xlsx，首行建议为字段名。</p>", unsafe_allow_html=True)
 
-        excel_file = st.file_uploader(
-            "选择文件",
-            type=["xlsx"],
-            key="excel",
-            label_visibility="collapsed",
-            help="仅支持.xlsx格式"
-        )
-        if excel_file:
-            file_size_bytes = len(excel_file.getvalue())
-            file_size_str = format_file_size(file_size_bytes)
+            excel_file = st.file_uploader(
+                "选择文件",
+                type=["xlsx"],
+                key="excel",
+                label_visibility="collapsed",
+                help="仅支持.xlsx格式"
+            )
+            if excel_file:
+                file_size_bytes = len(excel_file.getvalue())
+                file_size_str = format_file_size(file_size_bytes)
 
-            if file_size_bytes > MAX_EXCEL_FILE_SIZE:
-                st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
-                excel_file = None
-            else:
-                st.success(f"已加载：{excel_file.name}（{file_size_str}）", icon="✅")
-        st.markdown("</div>", unsafe_allow_html=True)
+                if file_size_bytes > MAX_EXCEL_FILE_SIZE:
+                    st.error(f"❌ 文件过大：{file_size_str}", icon="❌")
+                    excel_file = None
+                else:
+                    st.success(f"已加载：{excel_file.name}（{file_size_str}）", icon="✅")
 
     st.markdown("---")
 
     # 文件预览
-    with st.expander("👀 文件预览 - 点击查看/复制内容", expanded=False):
+    with st.expander("👀 文件预览 - 点击查看/复制内容", expanded=bool(word_file or excel_file)):
         col_prev1, col_prev2 = st.columns(2, gap="small")
 
         excel_df = None
@@ -1702,7 +1709,26 @@ if len(st.session_state.replaced_files) > 0:
 
     if file_data:
         file_df = pd.DataFrame(file_data)
-        st.dataframe(file_df, use_container_width=True, hide_index=True)
+        styled_file_df = (
+            file_df.style
+            .hide(axis="index")
+            .set_properties(
+                subset=["状态", "序号", "行号", "替换"],
+                **{"text-align": "center", "font-size": "14px", "font-weight": "600"}
+            )
+            .set_properties(subset=["状态"], **{"width": "70px"})
+            .set_properties(subset=["序号", "行号", "替换"], **{"width": "80px"})
+            .set_properties(
+                subset=["文件名"],
+                **{"text-align": "left", "font-size": "13px"}
+            )
+            .set_table_styles([
+                {"selector": "th", "props": [("text-align", "center"), ("font-size", "13px")]},
+                {"selector": "td", "props": [("vertical-align", "middle")]},
+            ])
+        )
+        table_height = min(420, 44 * len(file_data) + 42)
+        st.dataframe(styled_file_df, use_container_width=True, height=table_height)
 
     # 单个文件下载
     st.markdown("**单个文件下载**")

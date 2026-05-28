@@ -1,6 +1,6 @@
 # 🚀 WordReplace · Word + Excel 批量替换工具
 
-> 🔖 当前版本：`v1.6.3`  
+> 🔖 当前版本：`v1.6.4`  
 > 🧩 形态：Streamlit Web 应用（前后端一体）  
 > 👥 开发者：MaroD1M · Codex（AI 协作开发）
 
@@ -63,7 +63,7 @@ docker compose down
 在群晖 Docker / Container Manager 中可直接使用以下配置。  
 你通常只需要改两处：
 - 端口：`12344:8501`（把 `12344` 改成你想暴露的端口）
-- 镜像版本：`latest`（或改为固定版本，如 `v1.6.3`）
+- 镜像版本：`latest`（或改为固定版本，如 `v1.6.4`）
 
 ```yaml
 version: "3.9"
@@ -94,7 +94,7 @@ services:
 version: "3.9"
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v1.6.3
+    image: ghcr.io/marod1m/wordreplace:v1.6.4
     container_name: wordreplace
     restart: unless-stopped
     ports:
@@ -158,7 +158,7 @@ python3 -m venv .venv
 - 多阶段构建 + 非 root 用户运行
 - 构建/运行阶段执行系统包更新
 - CI 自动执行语法检查与单元测试
-- GHCR 标签：`latest`、`semver`（如 `1.6.3`）、`sha`
+- GHCR 标签：`latest`、`semver`（如 `1.6.4`）、`sha`
 
 ---
 
@@ -166,11 +166,11 @@ python3 -m venv .venv
 
 ```bash
 git add -A
-git commit -m "release: v1.6.3"
+git commit -m "release: v1.6.4"
 git push origin main
 
-git tag -a v1.6.3 -m "Release v1.6.3"
-git push origin v1.6.3
+git tag -a v1.6.4 -m "Release v1.6.4"
+git push origin v1.6.4
 ```
 
 ---
