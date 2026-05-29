@@ -1,0 +1,108 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.pyz
+*.pyz.cached
+build/
+dist/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+readme.md
+deploy.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+
+# Security: local secrets and credentials
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.kubeconfig
+*.ovpn
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+secrets.*
+credentials.*
+*.secret
+
+# Local hook artifacts
+.githooks/_logs/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Migration workspace
+.taskmaster/
+backend/.venv/
+backend/wordreplace.db
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Keep frontend API client in repo
+!frontend/src/lib/
+!frontend/src/lib/**
+
+# Task files
+# tasks.json
+# tasks/ 

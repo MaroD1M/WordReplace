@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  wordreplace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wordreplace
+    restart: unless-stopped
+    ports:
+      - "12344:8000"
+    # 可选：持久化 SQLite 数据库
+    # volumes:
+    #   - ./data:/app/data
+
