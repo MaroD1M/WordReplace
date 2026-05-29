@@ -1,62 +1,53 @@
-# WordReplace 开箱即用指南
+# WordReplace 2.0 快速开始
 
-> 版本：v1.6.6  
-> 适用对象：希望在 5 分钟内部署并开始批量替换 Word 模板的同学
+> 版本：v2.0.0  
+> 架构：FastAPI + Next.js + SQLite  
+> 推荐：单镜像部署
 
-## 1. 项目定位
-
-WordReplace 是一个前后端一体化应用（Streamlit Web UI + Python 业务层），用于把 `.docx` 模板和 `.xlsx` 数据自动批量生成目标文档，支持 ZIP、合并文档与统计导出。
-
-## 2. 一条命令启动（推荐）
+## 1) 最快启动（单镜像）
 
 ```bash
+docker compose up -d --build
+```
+
+访问：`http://localhost:12344`
+
+## 2) 使用已发布镜像
+
+```bash
+docker compose -f docker-compose.example.yml pull
 docker compose -f docker-compose.example.yml up -d
 ```
 
-访问 `http://localhost:8501`。
+## 3) 页面操作顺序
 
-停止：
+1. 上传 Word 模板与 Excel 数据
+2. 新增替换规则
+3. 设置起始行、结束行、文件名列
+4. 点击开始替换
+5. 下载 ZIP 或合并文档
 
+## 4) 常见问题
+
+- 执行按钮不可点：请确认已上传两个文件、至少一条规则、行号范围有效。
+- 导出失败：请先执行替换并确认生成 `run_id`。
+- Excel 列名不生效：请确保规则列名与 Excel 表头完全一致。
+
+## 5) 源码开发模式（可选）
+
+后端：
 ```bash
-docker compose -f docker-compose.example.yml down
-```
-
-## 3. 标准部署
-
-```bash
-docker compose up -d
-```
-
-访问 `http://localhost:12344`。
-
-## 4. 本地开发
-
-```bash
+cd backend
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip install pytest
-.venv/bin/streamlit run app/main.py
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-## 5. 本次安全修复
-
-- 基础镜像升级到 `python:3.12-alpine3.22`
-- 构建/运行阶段执行 `apk upgrade --no-cache`
-- 容器改为非 root 用户 `app`
-- 多阶段构建降低运行层暴露面
-- CI 增加依赖安装、语法检查、单元测试
-- Compose 文件增加健康检查
-
-## 6. 验证
-
+前端：
 ```bash
-python3 -m py_compile app/main.py app/core_utils.py app/services.py
-python3 -m pytest -q tests
+cd frontend
+cp .env.local.example .env.local
+pnpm install --ignore-scripts
+pnpm dev
 ```
-
-## 7. 示例使用流程
-
-1. 上传 Word 模板（`.docx`）
-2. 上传 Excel 数据（`.xlsx`）
-3. 配置关键词与列映射
-4. 执行批量替换并下载结果

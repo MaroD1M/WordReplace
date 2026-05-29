@@ -1,71 +1,38 @@
-# 🚀 WordReplace · Word + Excel 批量替换工具
+# 🚀 WordReplace 2.0
 
-> 🔖 当前版本：`v1.6.6`  
-> 🧩 形态：Streamlit Web 应用（前后端一体）  
-> 👥 开发者：MaroD1M · Codex（AI 协作开发）
+> Word + Excel 批量替换工具（单镜像版）
 
----
-
-## ✨ 项目简介
-
-`WordReplace` 用于将 **Word 模板（.docx）** 与 **Excel 数据（.xlsx）** 自动批量合成目标文档，适合通知书、合同、证书、名册等场景。
+把 Word 模板（`.docx`）和 Excel 数据（`.xlsx/.xls`）批量合成目标文档，支持一键导出 ZIP 或合并文档。  
+适合：通知书、合同、证书、函件、名册等标准化文档场景。
 
 ![WordReplace UI 预览](docs/images/ui-overview.png)
 
-### ✅ 你能得到什么
+---
 
-- 🔁 批量替换关键字（段落 + 表格）
-- 🧠 两种替换模式（完整替换 / 仅括号内容）
-- 📦 一键导出 ZIP、合并文档、统计 CSV、日志 TXT
-- 🛡️ 文件名安全与缓存键清洗
-- 🧪 CI 自动测试、语法检查、镜像构建
-- 🐳 Docker 开箱即用部署
+## 🧩 为什么用它
+
+- 批量替换：模板关键字自动匹配 Excel 列
+- 结果清晰：执行后直接看到总数/成功/失败/替换次数
+- 导出灵活：支持 ZIP 批量下载 + 合并文档下载
+- 部署简单：单镜像、单容器，一条命令即可启动
 
 ---
 
-## 🧱 目录结构
+## 🐳 30 秒快速部署（推荐）
 
-```text
-app/
-  main.py         # Streamlit 页面与交互逻辑
-  services.py     # 替换/合并/统计业务
-  core_utils.py   # 文本/文件名/校验工具
-tests/
-  test_services.py
-  test_core_utils.py
-Dockerfile
-requirements.txt
-docker-compose.yml
-docker-compose.example.yml
-.github/workflows/docker-publish.yml
-```
-
----
-
-## ⚡ 快速开始（推荐 Docker）
-
-### 一条命令启动
+### 方式 1：本地源码一键启动
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-访问：`http://localhost:12344`
-
-### 停止服务
-
-```bash
-docker compose down
-```
+打开：`http://localhost:12344`
 
 ---
 
-## 🐳 群晖用户（最简 Compose 示例）
+### 方式 2：直接拉取已发布镜像（最省事）
 
-在群晖 Docker / Container Manager 中可直接使用以下配置。  
-你通常只需要改两处：
-- 端口：`12344:8501`（把 `12344` 改成你想暴露的端口）
-- 镜像版本：`latest`（或改为固定版本，如 `v1.6.6`）
+新建 `docker-compose.yml`，粘贴下面内容：
 
 ```yaml
 version: "3.9"
@@ -75,110 +42,182 @@ services:
     container_name: wordreplace
     restart: unless-stopped
     ports:
-      - "12344:8501"
-    environment:
-      STREAMLIT_SERVER_HEADLESS: "true"
-      STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
-      STREAMLIT_SERVER_MAX_UPLOAD_SIZE: "50"
+      - "12344:8000"  # 只改左侧端口即可
 ```
 
-启动后访问：`http://群晖IP:12344`
+启动：
 
-### 群晖 3 步部署（新手版）
+```bash
+docker compose up -d
+```
 
-1. 打开 **Container Manager** → **项目** → **新增项目**。  
-2. 选择“通过 compose 文件创建”，粘贴上面的 YAML（按需改端口和版本）。  
-3. 点击部署，等待容器启动后访问 `http://群晖IP:你的端口`。
+访问：`http://你的服务器IP:12344`
 
-### 可选：启用缓存持久化（重建容器不丢缓存）
+---
+
+
+
+## 💾 可选：持久化数据库（推荐）
+
+默认情况下，规则数据保存在容器内。若你会重建容器，建议映射数据库目录：
 
 ```yaml
 version: "3.9"
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v1.6.6
+    image: ghcr.io/marod1m/wordreplace:latest
     container_name: wordreplace
     restart: unless-stopped
     ports:
-      - "12344:8501"
+      - "12344:8000"
     volumes:
-      - /volume1/docker/wordreplace/cache:/home/app/.cache/batch_replacer
+      - ./data:/app/data
+```
+
+说明：
+- 容器内数据库路径：`/app/data/wordreplace.db`
+- 主机目录 `./data` 会保存数据库文件，重建容器后规则不会丢失。
+
+---
+
+## 📦 群晖用户（简单版）
+
+在群晖 Container Manager 新建项目，直接粘贴上面的 compose。  
+你通常只需要改两处：
+
+- 端口：`12344:8000`（改成你想用的端口）
+- 镜像版本：`latest`（或固定版本如 `v2.0.0`）
+
+---
+
+## ✅ 使用流程（5 步）
+
+1. 上传 Word 模板和 Excel 数据
+2. 添加替换规则（模板关键字 -> Excel 列名）
+3. 设置起始行、结束行、文件名列
+4. 点击开始替换
+5. 下载 ZIP 或合并文档
+
+---
+
+## 🗂️ 项目结构（核心）
+
+```text
+backend/
+  app/
+    api/        # 路由
+    services/   # 替换与导出逻辑
+    models/     # SQLite 模型
+    schemas/    # 请求/响应模型
+frontend/
+  src/app/      # 页面
+  src/lib/api.ts
+Dockerfile      # 单镜像构建（前后端合并）
 ```
 
 ---
 
-## 🧭 使用示例（真实场景）
+## 🛠️ 开发模式（可选）
 
-### 场景：批量生成录用通知书
+如果你要本地调试源码：
 
-Word 模板中包含：`【姓名】`、`【部门】`、`【入职日期】`。  
-Excel 列名对应：`姓名`、`部门`、`入职日期`。
-
-### 操作步骤
-
-1. 上传 `offer_template.docx`
-2. 上传 `offer_data.xlsx`
-3. 添加规则：
-   - `【姓名】 -> 姓名`
-   - `【部门】 -> 部门`
-   - `【入职日期】 -> 入职日期`
-4. 选择行范围（例如 1 到 200）
-5. 点击“开始替换”并下载结果
-
-### 输出文件
-
-- `张三.docx`
-- `李四.docx`
-- `批量替换统计.csv`
-- `操作日志.txt`
-
----
-
-## 🧪 本地开发与测试
-
+后端：
 ```bash
+cd backend
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python -m pip install pytest
-.venv/bin/streamlit run app/main.py
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-访问：`http://localhost:8501`
+前端：
+```bash
+cd frontend
+cp .env.local.example .env.local
+pnpm install --ignore-scripts
+pnpm dev
+```
 
-质量校验：
+---
+
+## ⚙️ GitHub 自动构建
+
+仓库已配置自动构建并推送 GHCR：
+
+- 工作流：`.github/workflows/docker-publish.yml`
+- 触发：push 到 `main`、推送 `v*.*.*` 标签、手动触发
+- 镜像：`ghcr.io/<你的仓库>`
+- 标签：`latest` + 语义化版本
+
+---
+
+## ❓ 常见问题
+
+- 执行按钮不可点：请确认已上传两个文件、至少一条规则、行号范围有效。
+- 导出失败：请先执行替换并确认已生成结果。
+- Excel 列名不生效：规则列名必须与 Excel 表头完全一致。
+
+
+---
+
+## 🔒 固定版本部署（推荐生产环境）
+
+不建议生产环境长期使用 `latest`，建议固定版本标签：
+
+```yaml
+version: "3.9"
+services:
+  wordreplace:
+    image: ghcr.io/marod1m/wordreplace:v2.0.0
+    container_name: wordreplace
+    restart: unless-stopped
+    ports:
+      - "12344:8000"
+```
+
+---
+
+## 🔄 升级与回滚
+
+### 升级到最新版本
 
 ```bash
-.venv/bin/python -m py_compile app/main.py app/core_utils.py app/services.py
-.venv/bin/python -m pytest -q tests
+docker compose pull
+docker compose up -d
 ```
 
----
+### 升级到指定版本
 
-## 🔐 安全与镜像策略
-
-- 基础镜像：`python:3.12-alpine3.22`
-- 多阶段构建 + 非 root 用户运行
-- 构建/运行阶段执行系统包更新
-- CI 自动执行语法检查与单元测试
-- GHCR 标签：`latest`、`semver`（如 `1.6.6`）、`sha`
-
----
-
-## 🏷️ 版本发布
+1. 修改 compose 中镜像标签（例如 `v2.0.1`）
+2. 执行：
 
 ```bash
-git add -A
-git commit -m "release: v1.6.6"
-git push origin main
+docker compose pull
+docker compose up -d
+```
 
-git tag -a v1.6.6 -m "Release v1.6.6"
-git push origin v1.6.6
+### 回滚到旧版本
+
+1. 将镜像标签改回历史版本（例如 `v2.0.0`）
+2. 执行：
+
+```bash
+docker compose pull
+docker compose up -d
 ```
 
 ---
 
-## 📚 附加文档
+## 🧹 停止与卸载
 
-- 上手文档：`GETTING_STARTED.md`
-- CI 工作流：`.github/workflows/docker-publish.yml`
-- 进阶部署示例：`docker-compose.example.yml`
+停止服务：
+
+```bash
+docker compose down
+```
+
+连同镜像一起清理（可选）：
+
+```bash
+docker compose down --rmi local
+```

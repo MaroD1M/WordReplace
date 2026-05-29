@@ -70,3 +70,39 @@ credentials.*
 
 # Local hook artifacts
 .githooks/_logs/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dev-debug.log
+# Dependency directories
+node_modules/
+# Environment variables
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific
+
+# Task files
+# tasks.json
+# tasks/
+
+# Migration workspace
+.taskmaster/
+backend/.venv/
+backend/wordreplace.db
+frontend/node_modules/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo
+
+# Keep frontend API client in repo
+!frontend/src/lib/
+!frontend/src/lib/**

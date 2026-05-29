@@ -1,1 +1,0 @@
-"""WordReplace application package."""
