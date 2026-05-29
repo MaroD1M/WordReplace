@@ -7,7 +7,16 @@ services:
     restart: unless-stopped
     ports:
       - "12344:8000"
-    # 可选：持久化 SQLite 数据库
-    # volumes:
-    #   - ./data:/app/data
-
+    volumes:
+      - ./data:/app/data
+    environment:
+      # 仅允许这些前端来源跨域调用 API（逗号分隔）
+      CORS_ALLOW_ORIGINS: "http://localhost:12344"
+      # 上传文件大小限制（MB）
+      MAX_UPLOAD_SIZE_MB: "50"
+      # 结果缓存有效期（秒）
+      RUN_CACHE_TTL_SECONDS: "1800"
+      # 结果缓存最大记录数
+      RUN_CACHE_MAX_ENTRIES: "200"
+      # 导出签名密钥：生产环境请替换为强随机字符串
+      EXPORT_TOKEN_SECRET: "please-change-to-a-long-random-secret"

@@ -3,15 +3,7 @@ name: Build and Push Single Image
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
     tags: [ 'v*.*.*' ]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - 'Dockerfile'
-      - 'docker-compose.yml'
-      - 'docker-compose.example.yml'
-      - '.github/workflows/docker-publish.yml'
   pull_request:
     branches: [ main ]
     paths:

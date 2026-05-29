@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from app.services.replace_service import export_zip, get_run, merge_word_documents
+from app.services.replace_service import export_zip, get_run, merge_word_documents, verify_export_token
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -12,7 +12,9 @@ def export_modes() -> dict[str, list[str]]:
 
 
 @router.get("/zip/{run_id}")
-def download_zip(run_id: str):
+def download_zip(run_id: str, token: str = Query(...)):
+    if not verify_export_token(run_id, token):
+        raise HTTPException(status_code=403, detail="导出令牌无效")
     run = get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="任务不存在或已过期")
@@ -29,7 +31,9 @@ def download_zip(run_id: str):
 
 
 @router.get("/merge/{run_id}")
-def download_merge(run_id: str):
+def download_merge(run_id: str, token: str = Query(...)):
+    if not verify_export_token(run_id, token):
+        raise HTTPException(status_code=403, detail="导出令牌无效")
     run = get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="任务不存在或已过期")

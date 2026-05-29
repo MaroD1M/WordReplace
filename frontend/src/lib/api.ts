@@ -8,6 +8,7 @@ export type Rule = {
 
 export type ReplaceSummary = {
   run_id: string;
+  export_token: string;
   total: number;
   success: number;
   failed: number;
@@ -59,6 +60,7 @@ export async function executeReplace(payload: {
   return res.json();
 }
 
-export function getExportUrl(kind: "zip" | "merge", runId: string): string {
-  return `${API_BASE}/export/${kind}/${runId}`;
+export function getExportUrl(kind: "zip" | "merge", runId: string, token: string): string {
+  const q = new URLSearchParams({ token }).toString();
+  return `${API_BASE}/export/${kind}/${runId}?${q}`;
 }

@@ -187,8 +187,8 @@ export default function Home() {
               </div>
 
               <div className="flex gap-3">
-                <a className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href={getExportUrl("zip", summary.run_id)}>下载 ZIP</a>
-                <a className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href={getExportUrl("merge", summary.run_id)}>下载合并文档</a>
+                <a className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href={getExportUrl("zip", summary.run_id, summary.export_token)}>下载 ZIP</a>
+                <a className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm" href={getExportUrl("merge", summary.run_id, summary.export_token)}>下载合并文档</a>
               </div>
             </>
           ) : null}

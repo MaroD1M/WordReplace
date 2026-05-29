@@ -42,7 +42,17 @@ services:
     container_name: wordreplace
     restart: unless-stopped
     ports:
-      - "12344:8000"  # 只改左侧端口即可
+      - "12344:8000" # 左侧端口可改
+    # 可选：持久化数据库（推荐）
+    volumes:
+      - ./data:/app/data
+    # 可选：安全参数（均提供默认值）
+    environment:
+      CORS_ALLOW_ORIGINS: "http://localhost:12344,http://localhost:3000"
+      MAX_UPLOAD_SIZE_MB: "50"
+      RUN_CACHE_TTL_SECONDS: "1800"
+      RUN_CACHE_MAX_ENTRIES: "200"
+      EXPORT_TOKEN_SECRET: "please-change-to-a-long-random-secret"
 ```
 
 启动：
@@ -53,13 +63,9 @@ docker compose up -d
 
 访问：`http://你的服务器IP:12344`
 
----
+### 群晖快捷示例（可直接用）
 
-
-
-## 💾 可选：持久化数据库（推荐）
-
-默认情况下，规则数据保存在容器内。若你会重建容器，建议映射数据库目录：
+如果你在群晖 Container Manager 部署，推荐直接用下面这份：
 
 ```yaml
 version: "3.9"
@@ -69,24 +75,47 @@ services:
     container_name: wordreplace
     restart: unless-stopped
     ports:
-      - "12344:8000"
+      - "12344:8000" # 改成你想要的访问端口
     volumes:
-      - ./data:/app/data
+      - /volume1/docker/wordreplace/data:/app/data
+    environment:
+      CORS_ALLOW_ORIGINS: "http://你的群晖IP:12344"
+      MAX_UPLOAD_SIZE_MB: "50"
+      RUN_CACHE_TTL_SECONDS: "1800"
+      RUN_CACHE_MAX_ENTRIES: "200"
+      EXPORT_TOKEN_SECRET: "please-change-to-a-long-random-secret"
 ```
 
 说明：
-- 容器内数据库路径：`/app/data/wordreplace.db`
-- 主机目录 `./data` 会保存数据库文件，重建容器后规则不会丢失。
+- 你通常只需要改：端口、群晖 IP、数据目录路径、导出密钥。
+- `/volume1/docker/wordreplace/data` 建议提前创建。
+
+### 变量说明（environment）
+
+| 变量名 | 默认值 | 是否可选 | 用途 |
+|---|---|---|---|
+| `CORS_ALLOW_ORIGINS` | `http://localhost:12344,http://localhost:3000` | 可选 | 配置允许跨域访问 API 的前端域名（逗号分隔） |
+| `MAX_UPLOAD_SIZE_MB` | `50` | 可选 | 上传文件大小上限（MB），超出返回 413 |
+| `RUN_CACHE_TTL_SECONDS` | `1800` | 可选 | 结果缓存有效期（秒） |
+| `RUN_CACHE_MAX_ENTRIES` | `200` | 可选 | 结果缓存最大记录数，超出自动淘汰最旧记录 |
+| `EXPORT_TOKEN_SECRET` | `change-this-secret`（代码默认） | 可选（生产强烈建议配置） | 导出签名密钥，防止未授权下载 |
+
+> ℹ️ `CORS_ALLOW_ORIGINS` 需填写 **完整 Origin**（`协议://域名[:端口]`），多个值用英文逗号分隔；不要带路径（如 `/api`）。生产环境请改成你的真实域名。
+
+
+### volumes 说明
+
+| 挂载项 | 默认值 | 是否可选 | 用途 |
+|---|---|---|---|
+| `./data:/app/data` | 无（不挂载） | 可选（推荐） | 持久化 SQLite 数据库，容器重建后规则不丢失 |
+
+> ⚠️ 生产环境建议：务必设置 `EXPORT_TOKEN_SECRET` 为高强度随机字符串，并将 `CORS_ALLOW_ORIGINS` 改为你的真实域名。
 
 ---
 
-## 📦 群晖用户（简单版）
+## 💾 可选：持久化数据库（推荐）
 
-在群晖 Container Manager 新建项目，直接粘贴上面的 compose。  
-你通常只需要改两处：
-
-- 端口：`12344:8000`（改成你想用的端口）
-- 镜像版本：`latest`（或固定版本如 `v2.0.0`）
+默认情况下，规则数据保存在容器内。若你会重建容器，建议映射数据库目录。
 
 ---
 
@@ -145,7 +174,7 @@ pnpm dev
 仓库已配置自动构建并推送 GHCR：
 
 - 工作流：`.github/workflows/docker-publish.yml`
-- 触发：push 到 `main`、推送 `v*.*.*` 标签、手动触发
+- 触发：推送 `v*.*.*` 标签、手动触发（`workflow_dispatch`）
 - 镜像：`ghcr.io/<你的仓库>`
 - 标签：`latest` + 语义化版本
 
@@ -157,7 +186,6 @@ pnpm dev
 - 导出失败：请先执行替换并确认已生成结果。
 - Excel 列名不生效：规则列名必须与 Excel 表头完全一致。
 
-
 ---
 
 ## 🔒 固定版本部署（推荐生产环境）
@@ -168,7 +196,7 @@ pnpm dev
 version: "3.9"
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v2.0.0
+    image: ghcr.io/marod1m/wordreplace:v2.0.1
     container_name: wordreplace
     restart: unless-stopped
     ports:

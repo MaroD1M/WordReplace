@@ -1,6 +1,6 @@
 # WordReplace 2.0 快速开始
 
-> 版本：v2.0.0  
+> 版本：v2.0.1  
 > 架构：FastAPI + Next.js + SQLite  
 > 推荐：单镜像部署
 

@@ -1,8 +1,12 @@
 import copy
+import hashlib
+import hmac
 import io
+import logging
 import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -11,7 +15,10 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from app.core.config import settings
 from app.models.rule import Rule
+
+logger = logging.getLogger("wordreplace")
 
 
 @dataclass
@@ -23,6 +30,26 @@ class ReplacedFile:
 
 
 RUN_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _prune_cache(now: datetime | None = None) -> None:
+    now = now or _utcnow()
+    expired = [
+        rid for rid, item in RUN_CACHE.items()
+        if item.get("expires_at") and item["expires_at"] <= now
+    ]
+    for rid in expired:
+        RUN_CACHE.pop(rid, None)
+
+    if len(RUN_CACHE) <= settings.run_cache_max_entries:
+        return
+    oldest = sorted(RUN_CACHE.items(), key=lambda x: x[1].get("created_at", now))
+    for rid, _ in oldest[: max(0, len(RUN_CACHE) - settings.run_cache_max_entries)]:
+        RUN_CACHE.pop(rid, None)
 
 
 def clean_text(text: str) -> str:
@@ -144,7 +171,8 @@ def run_replace(word_bytes: bytes, excel_bytes: bytes, rules: list[Rule], start_
             out, cnt = replace_word_with_format(word_bytes, row, rule_pairs)
             out_files.append(ReplacedFile(filename=filename, data=out, row_idx=row_idx, replace_count=cnt))
             total_replace += cnt
-        except Exception:
+        except Exception as exc:
+            logger.warning("replace row failed: row_idx=%s err=%s", row_idx, exc)
             continue
 
     return {
@@ -157,13 +185,34 @@ def run_replace(word_bytes: bytes, excel_bytes: bytes, rules: list[Rule], start_
 
 
 def cache_run(result: dict[str, Any]) -> str:
+    _prune_cache()
     run_id = uuid4().hex[:12]
-    RUN_CACHE[run_id] = result
+    now = _utcnow()
+    RUN_CACHE[run_id] = {
+        **result,
+        "created_at": now,
+        "expires_at": now + timedelta(seconds=settings.run_cache_ttl_seconds),
+    }
     return run_id
 
 
 def get_run(run_id: str) -> dict[str, Any] | None:
+    _prune_cache()
     return RUN_CACHE.get(run_id)
+
+
+def sign_export_token(run_id: str) -> str:
+    digest = hmac.new(
+        settings.export_token_secret.encode("utf-8"),
+        run_id.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return digest
+
+
+def verify_export_token(run_id: str, token: str) -> bool:
+    expected = sign_export_token(run_id)
+    return hmac.compare_digest(expected, token)
 
 
 def export_zip(files: list[ReplacedFile]) -> io.BytesIO:

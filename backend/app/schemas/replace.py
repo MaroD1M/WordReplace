@@ -10,6 +10,7 @@ class ReplaceRequest(BaseModel):
 
 class ReplaceSummary(BaseModel):
     run_id: str
+    export_token: str
     total: int
     success: int
     failed: int
