@@ -2,7 +2,7 @@
 
 FROM node:20-alpine AS frontend-builder
 WORKDIR /frontend
-ARG APP_VERSION=2.0.3
+ARG APP_VERSION=2.0.4
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
 RUN corepack enable && corepack prepare pnpm@10.17.1 --activate && pnpm install --frozen-lockfile --ignore-scripts
 COPY frontend ./
@@ -12,7 +12,7 @@ RUN pnpm build
 
 FROM python:3.12-slim AS runtime
 WORKDIR /app
-ARG APP_VERSION=2.0.3
+ARG APP_VERSION=2.0.4
 ENV APP_VERSION=${APP_VERSION}
 ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 

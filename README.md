@@ -214,7 +214,7 @@ pnpm dev
 version: "3.9"
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v2.0.3
+    image: ghcr.io/marod1m/wordreplace:v2.0.4
     container_name: wordreplace
     restart: unless-stopped
     ports:
@@ -234,7 +234,7 @@ docker compose up -d
 
 ### 升级到指定版本
 
-1. 修改 compose 中镜像标签（例如 `v2.0.3`，版本号以仓库 `VERSION` 文件为准）
+1. 修改 compose 中镜像标签（例如 `v2.0.4`，版本号以仓库 `VERSION` 文件为准）
 2. 执行：
 
 ```bash
