@@ -23,7 +23,7 @@ const MAX_CONTENT_WIDTH = 1800;
 const MIN_CONTENT_WIDTH = 1100;
 const MAX_FONT_SIZE = 18;
 const MIN_FONT_SIZE = 14;
-const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "2.0.4";
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "2.0.5";
 
 function Section({ title, hint, children }: { title: string; hint: string; children: React.ReactNode }) {
   return (
