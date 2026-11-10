@@ -1,10 +1,17 @@
 import io
 
-import pandas as pd
 from docx import Document
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.core.excel import read_excel
+from app.core.uploads import (
+    ALLOWED_EXCEL_EXT,
+    ALLOWED_WORD_EXT,
+    validate_size,
+    validate_upload,
+)
 from app.schemas.preview import PreviewResponse
+from app.services.replace_service import iter_document_paragraphs
 
 router = APIRouter(prefix="/preview", tags=["preview"])
 
@@ -14,24 +21,27 @@ async def preview_files(
     word_file: UploadFile = File(...),
     excel_file: UploadFile = File(...),
 ):
-    if not (word_file.filename or "").lower().endswith(".docx"):
-        raise HTTPException(status_code=400, detail="Word 文件类型不支持")
-    if not any((excel_file.filename or "").lower().endswith(ext) for ext in (".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Excel 文件类型不支持")
+    validate_upload(word_file, ALLOWED_WORD_EXT, "Word")
+    validate_upload(excel_file, ALLOWED_EXCEL_EXT, "Excel")
 
     word_bytes = await word_file.read()
     excel_bytes = await excel_file.read()
+    validate_size(word_bytes, "Word")
+    validate_size(excel_bytes, "Excel")
 
     try:
         doc = Document(io.BytesIO(word_bytes))
-        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+        paragraphs = [
+            paragraph.text.strip()
+            for paragraph in iter_document_paragraphs(doc)
+            if paragraph.text and paragraph.text.strip()
+        ]
         word_text = "\n".join(paragraphs)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Word 预览失败: {exc}")
 
     try:
-        df = pd.read_excel(io.BytesIO(excel_bytes)).fillna("")
-        df.columns = [str(c).strip() for c in df.columns]
+        df = read_excel(excel_bytes)
         excel_columns = list(df.columns)
         rows = []
         for _, row in df.head(25).iterrows():

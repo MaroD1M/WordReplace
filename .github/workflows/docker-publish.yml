@@ -3,6 +3,7 @@ name: Build and Push Single Image
 on:
   workflow_dispatch:
   push:
+    branches: [ main ]
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ main ]
@@ -28,11 +29,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate backend syntax
+      - name: Validate backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install -r backend/requirements-dev.txt
           python -m py_compile backend/app/main.py backend/app/api/*.py backend/app/services/*.py backend/app/schemas/*.py backend/app/models/*.py backend/app/db/*.py backend/app/core/*.py
+          cd backend && python -m pytest -q
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -46,10 +48,11 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Validate frontend build
+      - name: Validate frontend
         working-directory: frontend
         run: |
           pnpm install --frozen-lockfile --ignore-scripts
+          pnpm lint
           pnpm build
 
   build-and-push:

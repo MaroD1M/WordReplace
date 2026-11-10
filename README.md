@@ -99,8 +99,11 @@ services:
 | `RUN_CACHE_TTL_SECONDS` | `1800` | 可选 | 结果缓存有效期（秒） |
 | `RUN_CACHE_MAX_ENTRIES` | `200` | 可选 | 结果缓存最大记录数，超出自动淘汰最旧记录 |
 | `EXPORT_TOKEN_SECRET` | `change-this-secret`（代码默认） | 可选（生产强烈建议配置） | 导出签名密钥，防止未授权下载 |
+| `DATABASE_URL` | `sqlite:////app/data/wordreplace.db` | 可选 | 数据库连接串，默认使用挂载目录下的 SQLite |
 
 > ℹ️ `CORS_ALLOW_ORIGINS` 需填写 **完整 Origin**（`协议://域名[:端口]`），多个值用英文逗号分隔；不要带路径（如 `/api`）。生产环境请改成你的真实域名。
+
+> ℹ️ 生成结果保存在**进程内存**中（默认 TTL 30 分钟），请保持单 worker 运行；如需多副本/多 worker，需自行改为 Redis 等外置缓存。
 
 
 ### volumes 说明

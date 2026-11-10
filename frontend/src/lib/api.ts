@@ -1,5 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
+export type SeqFormat = "1" | "01" | "0001" | "1." | "一";
+
 export type Rule = {
   id: number;
   keyword: string;
@@ -59,21 +61,40 @@ export type PreviewData = {
   excel_total_rows: number;
 };
 
-export async function fetchRules(): Promise<Rule[]> {
-  const res = await fetch(`${API_BASE}/rules`, { cache: "no-store" });
-  if (!res.ok) throw new Error("加载规则失败");
-  return res.json();
+/**
+ * FastAPI returns errors as {"detail": "..."} (or a list of validation
+ * objects). Parse that instead of showing raw JSON to the user.
+ */
+export async function parseApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const text = await res.text();
+    if (!text) return fallback;
+    try {
+      const data = JSON.parse(text) as { detail?: unknown };
+      if (typeof data.detail === "string") return data.detail;
+      if (Array.isArray(data.detail)) {
+        return data.detail
+          .map((item) => (typeof item === "object" && item && "msg" in item ? String(item.msg) : JSON.stringify(item)))
+          .join("；");
+      }
+    } catch {
+      // not JSON, fall through to raw text
+    }
+    return text;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function fetchTemplates(): Promise<RuleTemplateListItem[]> {
   const res = await fetch(`${API_BASE}/rule-templates`, { cache: "no-store" });
-  if (!res.ok) throw new Error("加载模板库失败");
+  if (!res.ok) throw new Error(await parseApiError(res, "加载模板库失败"));
   return res.json();
 }
 
 export async function fetchTemplateDetail(templateId: number): Promise<RuleTemplateDetail> {
   const res = await fetch(`${API_BASE}/rule-templates/${templateId}`, { cache: "no-store" });
-  if (!res.ok) throw new Error("加载模板详情失败");
+  if (!res.ok) throw new Error(await parseApiError(res, "加载模板详情失败"));
   return res.json();
 }
 
@@ -88,11 +109,15 @@ export async function createTemplate(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("创建模板失败");
+  if (!res.ok) throw new Error(await parseApiError(res, "创建模板失败"));
   return res.json();
 }
 
-export async function applyTemplate(templateId: number, excelColumns: string[], mode: "replace" | "append"): Promise<{
+export async function applyTemplate(
+  templateId: number,
+  excelColumns: string[],
+  mode: "replace" | "append",
+): Promise<{
   valid_items: Array<{ keyword: string; excel_column: string }>;
   invalid_items: Array<{ keyword: string; excel_column: string }>;
 }> {
@@ -101,44 +126,16 @@ export async function applyTemplate(templateId: number, excelColumns: string[], 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ excel_columns: excelColumns, mode }),
   });
-  if (!res.ok) throw new Error("应用模板失败");
+  if (!res.ok) throw new Error(await parseApiError(res, "应用模板失败"));
   return res.json();
 }
 
-export async function createRule(payload: { keyword: string; excel_column: string }): Promise<Rule> {
-  const res = await fetch(`${API_BASE}/rules`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error("创建规则失败");
-  return res.json();
-}
-
-export async function deleteRule(ruleId: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/rules/${ruleId}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("删除规则失败");
-}
-
-export async function updateRule(ruleId: number, payload: { keyword: string; excel_column: string }): Promise<Rule> {
-  const res = await fetch(`${API_BASE}/rules/${ruleId}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error("更新规则失败");
-  return res.json();
-}
-
-export async function previewFiles(wordFile: File, excelFile: File): Promise<PreviewData> {
+export async function previewFiles(wordFile: File, excelFile: File, signal?: AbortSignal): Promise<PreviewData> {
   const form = new FormData();
   form.append("word_file", wordFile);
   form.append("excel_file", excelFile);
-  const res = await fetch(`${API_BASE}/preview`, { method: "POST", body: form });
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(msg || "预览失败");
-  }
+  const res = await fetch(`${API_BASE}/preview`, { method: "POST", body: form, signal });
+  if (!res.ok) throw new Error(await parseApiError(res, "预览失败"));
   return res.json();
 }
 
@@ -150,7 +147,7 @@ export async function executeReplace(payload: {
   fileNameColumn: string;
   rules: { keyword: string; excel_column: string }[];
   useSeqPrefix: boolean;
-  seqFormat: "1" | "01" | "0001" | "1." | "一";
+  seqFormat: SeqFormat;
   seqColumn: string;
   namePrefix: string;
   nameSuffix: string;
@@ -170,10 +167,7 @@ export async function executeReplace(payload: {
   form.append("name_suffix", payload.nameSuffix);
 
   const res = await fetch(`${API_BASE}/replace/execute`, { method: "POST", body: form });
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(msg || "执行替换失败");
-  }
+  if (!res.ok) throw new Error(await parseApiError(res, "执行替换失败"));
   return res.json();
 }
 
@@ -187,12 +181,13 @@ export function getSingleFileExportUrl(runId: string, itemId: string, token: str
   return `${API_BASE}/export/file/${runId}/${itemId}?${q}`;
 }
 
-export async function deleteSingleResult(runId: string, itemId: string, token: string): Promise<Pick<ReplaceSummary, "total" | "success" | "failed" | "replacements" | "details"> & { deleted: boolean }> {
+export async function deleteSingleResult(
+  runId: string,
+  itemId: string,
+  token: string,
+): Promise<Pick<ReplaceSummary, "total" | "success" | "failed" | "replacements" | "details"> & { deleted: boolean }> {
   const q = new URLSearchParams({ token }).toString();
   const res = await fetch(`${API_BASE}/export/result/${runId}/${itemId}?${q}`, { method: "DELETE" });
-  if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(msg || "删除结果失败");
-  }
+  if (!res.ok) throw new Error(await parseApiError(res, "删除结果失败"));
   return res.json();
 }

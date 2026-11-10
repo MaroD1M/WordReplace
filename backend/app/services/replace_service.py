@@ -3,19 +3,23 @@ import hashlib
 import hmac
 import io
 import logging
+import threading
 import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Iterator
 from uuid import uuid4
 
 import pandas as pd
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
+from docx.text.run import Run
 
 from app.core.config import settings
+from app.core.excel import read_excel
 
 logger = logging.getLogger("wordreplace")
 
@@ -30,6 +34,7 @@ class ReplacedFile:
 
 
 RUN_CACHE: dict[str, dict[str, Any]] = {}
+_CACHE_LOCK = threading.RLock()
 
 
 def _utcnow() -> datetime:
@@ -75,25 +80,126 @@ def precompute_replace_patterns(rules: list[tuple[str, str]], excel_row: pd.Seri
     return patterns
 
 
+def _find_occurrences(text: str, key: str) -> list[int]:
+    starts: list[int] = []
+    if not key:
+        return starts
+    index = text.find(key)
+    while index != -1:
+        starts.append(index)
+        index = text.find(key, index + len(key))
+    return starts
+
+
+def _paragraph_runs(paragraph) -> list[Run]:
+    """Return runs in the same order/content used by ``Paragraph.text``.
+
+    ``Paragraph.text`` includes hyperlink text while ``Paragraph.runs`` does
+    not, so we expand hyperlinks ourselves to keep character offsets aligned.
+    """
+    runs: list[Run] = []
+    for child in paragraph._p.xpath("w:r | w:hyperlink"):
+        if child.tag == qn("w:r"):
+            runs.append(Run(child, paragraph))
+        else:
+            runs.extend(Run(run_element, paragraph) for run_element in child.xpath("w:r"))
+    return runs
+
+
+def _has_embedded_object(run: Run) -> bool:
+    return bool(run._r.xpath(".//w:drawing | .//w:pict | .//w:object"))
+
+
+def _replace_span(paragraph, start: int, end: int, replacement: str) -> None:
+    """Replace paragraph text[start:end] while preserving each run's formatting.
+
+    The replacement is written into the run that owns the first matched
+    character, which keeps that run's font/bold/color. Runs fully covered by
+    the match are emptied and the tail of the last run is kept so text after
+    the match is not lost.
+    """
+    runs = _paragraph_runs(paragraph)
+    spans: list[tuple[int, int, int]] = []
+    cursor = 0
+    for idx, run in enumerate(runs):
+        run_text = run.text
+        spans.append((idx, cursor, cursor + len(run_text)))
+        cursor += len(run_text)
+
+    start_run = end_run = None
+    start_local = end_local = 0
+    for idx, run_start, run_end in spans:
+        if run_start <= start < run_end:
+            start_run, start_local = idx, start - run_start
+        if run_start < end <= run_end:
+            end_run, end_local = idx, end - run_start
+
+    if start_run is None or end_run is None:
+        return
+
+    if start_run == end_run:
+        text = runs[start_run].text
+        runs[start_run].text = text[:start_local] + replacement + text[end_local:]
+        return
+
+    start_text = runs[start_run].text
+    runs[start_run].text = start_text[:start_local] + replacement
+    for idx in range(start_run + 1, end_run):
+        # Clearing a run wipes embedded images/shapes, so leave those intact.
+        if not _has_embedded_object(runs[idx]):
+            runs[idx].text = ""
+    end_text = runs[end_run].text
+    runs[end_run].text = end_text[end_local:]
+
+
 def process_paragraph(paragraph, replace_patterns: list[tuple[str, str, str, str]]) -> int:
-    para_text = paragraph.text
-    if not para_text or not replace_patterns:
+    if not replace_patterns:
         return 0
 
-    new_text = para_text
     count = 0
-    for _, _, key, replacement in replace_patterns:
-        hit = new_text.count(key)
-        if hit:
-            count += hit
-            new_text = new_text.replace(key, replacement)
-
-    if count > 0 and len(paragraph.runs) > 0:
-        paragraph.runs[0].text = new_text
-        for i in range(1, len(paragraph.runs)):
-            paragraph.runs[i].text = ""
-
+    # Longest keyword first so overlapping keys match the most specific one.
+    for _, _, key, replacement in sorted(replace_patterns, key=lambda p: len(p[2]), reverse=True):
+        if not key:
+            continue
+        text = paragraph.text
+        if not text or key not in text:
+            continue
+        # Replace right-to-left so earlier character offsets stay valid.
+        for start in reversed(_find_occurrences(text, key)):
+            _replace_span(paragraph, start, start + len(key), replacement)
+            count += 1
     return count
+
+
+def _iter_header_footer_paragraphs(doc: Document) -> Iterator[Paragraph]:
+    for section in doc.sections:
+        containers = (
+            section.header,
+            section.footer,
+            section.first_page_header,
+            section.first_page_footer,
+            section.even_page_header,
+            section.even_page_footer,
+        )
+        for container in containers:
+            try:
+                if container.is_linked_to_previous:
+                    continue
+            except Exception:
+                continue
+            for p_element in container._element.iter(qn("w:p")):
+                yield Paragraph(p_element, None)
+
+
+def iter_document_paragraphs(doc: Document) -> Iterator[Paragraph]:
+    """Yield every paragraph reachable from the document.
+
+    Walking the XML tree (instead of doc.paragraphs/doc.tables) covers nested
+    tables and text boxes, and yields merged table cells exactly once.
+    """
+    for p_element in doc._body._element.iter(qn("w:p")):
+        yield Paragraph(p_element, None)
+    yield from _iter_header_footer_paragraphs(doc)
 
 
 def replace_word_with_format(word_bytes: bytes, excel_row: pd.Series, rules: list[tuple[str, str]]) -> tuple[io.BytesIO, int]:
@@ -101,14 +207,8 @@ def replace_word_with_format(word_bytes: bytes, excel_row: pd.Series, rules: lis
     patterns = precompute_replace_patterns(rules, excel_row)
     total_replace = 0
 
-    for paragraph in doc.paragraphs:
+    for paragraph in iter_document_paragraphs(doc):
         total_replace += process_paragraph(paragraph, patterns)
-
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    total_replace += process_paragraph(paragraph, patterns)
 
     output = io.BytesIO()
     doc.save(output)
@@ -147,6 +247,8 @@ def _build_filename(row: pd.Series, file_name_column: str, row_idx: int) -> str:
         base = str(row[file_name_column]).strip()
     else:
         base = f"文件_{row_idx + 1}"
+    if base.lower().endswith(".docx"):
+        base = base[: -len(".docx")]
     return clean_filename(f"{base}.docx")
 
 
@@ -195,8 +297,7 @@ def run_replace(
     name_prefix: str = "",
     name_suffix: str = "",
 ) -> dict[str, Any]:
-    excel_df = pd.read_excel(io.BytesIO(excel_bytes)).fillna("")
-    excel_df.columns = [str(c).strip() for c in excel_df.columns]
+    excel_df = read_excel(excel_bytes)
 
     max_row = len(excel_df)
     start_idx = max(0, start_row - 1)
@@ -264,68 +365,83 @@ def run_replace(
 
 
 def cache_run(result: dict[str, Any]) -> str:
-    _prune_cache()
     run_id = uuid4().hex[:12]
     now = _utcnow()
-    RUN_CACHE[run_id] = {
-        **result,
-        "created_at": now,
-        "expires_at": now + timedelta(seconds=settings.run_cache_ttl_seconds),
-    }
+    with _CACHE_LOCK:
+        _prune_cache(now)
+        RUN_CACHE[run_id] = {
+            **result,
+            "created_at": now,
+            "expires_at": now + timedelta(seconds=settings.run_cache_ttl_seconds),
+        }
     return run_id
 
 
 def get_run(run_id: str) -> dict[str, Any] | None:
-    _prune_cache()
-    return RUN_CACHE.get(run_id)
+    with _CACHE_LOCK:
+        _prune_cache()
+        return RUN_CACHE.get(run_id)
 
 
 def get_run_file(run_id: str, item_id: str) -> ReplacedFile | None:
-    run = get_run(run_id)
-    if not run:
-        return None
-    for f in run.get("files", []):
-        if f.item_id == item_id:
-            return f
+    with _CACHE_LOCK:
+        _prune_cache()
+        run = RUN_CACHE.get(run_id)
+        if not run:
+            return None
+        for f in run.get("files", []):
+            if f.item_id == item_id:
+                return f
     return None
 
 
 def delete_run_file(run_id: str, item_id: str) -> dict[str, Any] | None:
-    run = get_run(run_id)
-    if not run:
-        return None
-    original_len = len(run.get("files", []))
-    run["files"] = [f for f in run.get("files", []) if f.item_id != item_id]
-    if len(run["files"]) == original_len:
+    with _CACHE_LOCK:
+        _prune_cache()
+        run = RUN_CACHE.get(run_id)
+        if not run:
+            return None
+        original_len = len(run.get("files", []))
+        run["files"] = [f for f in run.get("files", []) if f.item_id != item_id]
+        if len(run["files"]) == original_len:
+            return run
+        new_details: list[dict[str, Any]] = []
+        seq = 1
+        for d in run.get("details", []):
+            if d.get("item_id") == item_id:
+                continue
+            d["seq"] = seq
+            seq += 1
+            new_details.append(d)
+        run["details"] = new_details
+        run["total"] = len(new_details)
+        run["success"] = sum(1 for d in new_details if d.get("status") == "成功")
+        run["failed"] = run["total"] - run["success"]
+        run["replacements"] = sum(int(d.get("replace_count", 0)) for d in new_details)
         return run
-    new_details: list[dict[str, Any]] = []
-    seq = 1
-    for d in run.get("details", []):
-        if d.get("item_id") == item_id:
-            continue
-        d["seq"] = seq
-        seq += 1
-        new_details.append(d)
-    run["details"] = new_details
-    run["total"] = len(new_details)
-    run["success"] = sum(1 for d in new_details if d.get("status") == "成功")
-    run["failed"] = run["total"] - run["success"]
-    run["replacements"] = sum(int(d.get("replace_count", 0)) for d in new_details)
-    return run
 
 
-def sign_export_token(run_id: str) -> str:
-    digest = hmac.new(
-        settings.export_token_secret.encode("utf-8"),
-        run_id.encode("utf-8"),
-        hashlib.sha256,
-    ).hexdigest()
-    return digest
+def _token_digest(run_id: str, expires_at: int) -> str:
+    message = f"{run_id}:{expires_at}".encode("utf-8")
+    return hmac.new(settings.export_token_secret.encode("utf-8"), message, hashlib.sha256).hexdigest()
+
+
+def sign_export_token(run_id: str, ttl_seconds: int | None = None) -> str:
+    ttl = settings.run_cache_ttl_seconds if ttl_seconds is None else ttl_seconds
+    expires_at = int(_utcnow().timestamp()) + ttl
+    return f"{expires_at}.{_token_digest(run_id, expires_at)}"
 
 
 def verify_export_token(run_id: str, token: str) -> bool:
-    expected = sign_export_token(run_id)
-    return hmac.compare_digest(expected, token)
+    try:
+        expires_raw, digest = token.split(".", 1)
+        expires_at = int(expires_raw)
+    except (AttributeError, TypeError, ValueError):
+        return False
+    if expires_at < int(_utcnow().timestamp()):
+        return False
+    expected = _token_digest(run_id, expires_at)
+    return hmac.compare_digest(expected, digest)
 
 
 def export_zip(files: list[ReplacedFile]) -> io.BytesIO:

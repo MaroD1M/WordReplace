@@ -1,27 +1,18 @@
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
-from app.core.config import settings
+from app.core.uploads import (
+    ALLOWED_EXCEL_EXT,
+    ALLOWED_WORD_EXT,
+    validate_size,
+    validate_upload,
+)
 from app.schemas.replace import ExecuteResponse, ReplaceSummary
 from app.services.replace_service import cache_run, run_replace, sign_export_token
 
 router = APIRouter(prefix="/replace", tags=["replace"])
-
-ALLOWED_WORD_EXT = {".docx"}
-ALLOWED_EXCEL_EXT = {".xlsx", ".xls"}
-
-
-def _validate_upload(upload: UploadFile, allowed_ext: set[str], label: str) -> None:
-    filename = (upload.filename or "").lower()
-    if not any(filename.endswith(ext) for ext in allowed_ext):
-        raise HTTPException(status_code=400, detail=f"{label} 文件类型不支持")
-
-
-def _validate_size(content: bytes, label: str) -> None:
-    max_bytes = settings.max_upload_size_mb * 1024 * 1024
-    if len(content) > max_bytes:
-        raise HTTPException(status_code=413, detail=f"{label} 超过 {settings.max_upload_size_mb}MB 限制")
 
 
 @router.post("/execute", response_model=ExecuteResponse)
@@ -45,8 +36,8 @@ async def execute_replace(
         raise HTTPException(status_code=400, detail="不支持的导出模式")
     if seq_format not in {"1", "01", "0001", "1.", "一"}:
         raise HTTPException(status_code=400, detail="不支持的序号格式")
-    _validate_upload(word_file, ALLOWED_WORD_EXT, "Word")
-    _validate_upload(excel_file, ALLOWED_EXCEL_EXT, "Excel")
+    validate_upload(word_file, ALLOWED_WORD_EXT, "Word")
+    validate_upload(excel_file, ALLOWED_EXCEL_EXT, "Excel")
 
     try:
         parsed_rules = json.loads(rules_json)
@@ -66,10 +57,11 @@ async def execute_replace(
 
     word_bytes = await word_file.read()
     excel_bytes = await excel_file.read()
-    _validate_size(word_bytes, "Word")
-    _validate_size(excel_bytes, "Excel")
+    validate_size(word_bytes, "Word")
+    validate_size(excel_bytes, "Excel")
 
-    result = run_replace(
+    result = await run_in_threadpool(
+        run_replace,
         word_bytes=word_bytes,
         excel_bytes=excel_bytes,
         rules=rules,

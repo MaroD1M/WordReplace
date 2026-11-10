@@ -24,6 +24,7 @@ def _parse_origins() -> list[str]:
 
 settings = Settings(
     app_version=os.getenv("APP_VERSION", "2.0.5"),
+    database_url=os.getenv("DATABASE_URL", "sqlite:////app/data/wordreplace.db"),
     cors_allow_origins=_parse_origins(),
     max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "50")),
     run_cache_ttl_seconds=int(os.getenv("RUN_CACHE_TTL_SECONDS", "1800")),

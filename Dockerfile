@@ -17,7 +17,8 @@ ENV APP_VERSION=${APP_VERSION}
 ENV NEXT_PUBLIC_APP_VERSION=${APP_VERSION}
 
 COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt \
+    && mkdir -p /app/data
 
 COPY backend/app ./app
 COPY --from=frontend-builder /frontend/out ./frontend_dist
