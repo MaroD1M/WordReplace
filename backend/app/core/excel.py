@@ -1,8 +1,11 @@
 import io
+import logging
 
 import pandas as pd
 
 from app.core.config import settings
+
+logger = logging.getLogger("wordreplace")
 
 
 def list_sheets(data: bytes) -> list[str]:
@@ -16,10 +19,31 @@ def read_excel(data: bytes, sheet_name: str | int = 0) -> pd.DataFrame:
     Without ``dtype=str`` pandas turns numeric cells into floats (``123.0``)
     and dates into timestamps, which leak into generated filenames and Word
     content. Empty cells become ``""`` instead of ``NaN``.
+
+    If a requested sheet no longer exists (for example the user switched the
+    Excel file while the page still held the previous sheet name), fall back to
+    the first sheet instead of failing the whole preview/execute request.
     """
+    workbook = pd.ExcelFile(io.BytesIO(data))
+    sheets = [str(name) for name in workbook.sheet_names]
+
+    target: str | int = sheet_name
+    if isinstance(sheet_name, str):
+        requested = sheet_name.strip()
+        if requested and requested in sheets:
+            target = requested
+        else:
+            target = sheets[0] if sheets else 0
+            if requested:
+                logger.warning(
+                    "sheet %r not found, falling back to %r",
+                    requested,
+                    target,
+                )
+
     df = pd.read_excel(
-        io.BytesIO(data),
-        sheet_name=sheet_name,
+        workbook,
+        sheet_name=target,
         dtype=str,
         keep_default_na=False,
     )

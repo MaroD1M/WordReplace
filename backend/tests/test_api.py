@@ -121,3 +121,16 @@ def test_execute_and_export_zip_with_token():
             params={"token": "bad-token"},
         )
         assert bad_token.status_code == 403
+
+
+def test_preview_falls_back_when_sheet_is_missing():
+    with TestClient(app) as client:
+        response = client.post(
+            "/preview",
+            files=_files(),
+            data={"sheet_name": "不存在的表"},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["selected_sheet"] == "Sheet1"
+    assert data["excel_columns"] == ["姓名", "文件"]

@@ -49,11 +49,9 @@ async def preview_files(
 
     try:
         sheets = list_sheets(excel_bytes)
-        selected_sheet = sheet_name.strip()
-        if selected_sheet and selected_sheet not in sheets:
-            raise ValueError("指定的工作表不存在")
+        requested_sheet = sheet_name.strip()
+        selected_sheet = requested_sheet if requested_sheet in sheets else (sheets[0] if sheets else "")
         df = read_excel(excel_bytes, selected_sheet or 0)
-        selected_sheet = selected_sheet or (sheets[0] if sheets else "")
         excel_columns = list(df.columns)
         rows = []
         for _, row in df.head(settings.max_preview_rows).iterrows():

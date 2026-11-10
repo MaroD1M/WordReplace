@@ -32,6 +32,12 @@ function validateFile(file: File, extensions: string[], label: string, maxUpload
   return null;
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function UploadSection({
   wordFile,
   setWordFile,
@@ -168,6 +174,12 @@ export default function UploadSection({
                     event.target.value = "";
                   }}
                 />
+                <div
+                  className={`mt-1 truncate text-xs ${wordFile ? "text-emerald-700" : "text-slate-400"}`}
+                  title={wordFile?.name}
+                >
+                  {wordFile ? `已选择：${wordFile.name}（${formatSize(wordFile.size)}）` : "未选择文件"}
+                </div>
               </label>
               {wordFile ? (
                 <button
@@ -214,6 +226,12 @@ export default function UploadSection({
                     event.target.value = "";
                   }}
                 />
+                <div
+                  className={`mt-1 truncate text-xs ${excelFile ? "text-emerald-700" : "text-slate-400"}`}
+                  title={excelFile?.name}
+                >
+                  {excelFile ? `已选择：${excelFile.name}（${formatSize(excelFile.size)}）` : "未选择文件"}
+                </div>
               </label>
               {excelFile ? (
                 <button

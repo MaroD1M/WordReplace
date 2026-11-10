@@ -144,7 +144,7 @@ curl -fsS -X POST "$BASE/preview" \
 
 - `word_text` 包含正文、表格、页眉页脚中可提取的文字。
 - `excel_rows` 最多返回 `MAX_PREVIEW_ROWS`（默认 25）行。
-- 工作表名称不存在时返回 400。
+- 工作表名称不存在时自动回退到第一个工作表，并在响应中返回实际使用的 `selected_sheet`。
 - 文件扩展名、文件头或大小不合法时返回 400 / 413。
 
 ---

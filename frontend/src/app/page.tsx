@@ -131,6 +131,13 @@ export default function Home() {
     target.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function handleExcelFileChange(file: File | null) {
+    // Reset the sheet before the new file enters state, otherwise the preview
+    // effect can briefly send the previous file's sheet name to the new file.
+    setSelectedSheet("");
+    setExcelFile(file);
+  }
+
   async function onExecute(event: FormEvent) {
     event.preventDefault();
     if (!wordFile || !excelFile) return;
@@ -198,7 +205,7 @@ export default function Home() {
           wordFile={wordFile}
           setWordFile={setWordFile}
           excelFile={excelFile}
-          setExcelFile={setExcelFile}
+          setExcelFile={handleExcelFileChange}
           preview={preview}
           previewLoading={previewLoading}
           previewWrap={previewWrap}

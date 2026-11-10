@@ -104,3 +104,14 @@ def test_filename_reserved_name_and_length():
     result_long = run_replace(_word_bytes(), excel_long, RULES, 1, 1, "文件")
     stem = result_long["details"][0]["file_name"][: -len(".docx")]
     assert len(stem) <= 120
+
+
+def test_missing_sheet_falls_back_to_first_sheet():
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer) as writer:
+        pd.DataFrame([{"姓名": "第一页", "文件": "a"}]).to_excel(writer, sheet_name="Sheet1", index=False)
+        pd.DataFrame([{"姓名": "第二页", "文件": "b"}]).to_excel(writer, sheet_name="Sheet2", index=False)
+
+    result = run_replace(_word_bytes(), buffer.getvalue(), RULES, 1, 1, "文件", sheet_name="不存在")
+    output = Document(io.BytesIO(result["files"][0].data.getvalue()))
+    assert output.paragraphs[0].text == "第一页"
