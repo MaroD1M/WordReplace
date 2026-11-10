@@ -34,7 +34,8 @@
 - 文档体系重构：新增部署、排障、架构、API、升级、安全、贡献指南。
 - 新增 `.env.example`、`scripts/backup.sh`、`scripts/restore.sh`、`scripts/check_all.sh`，便于配置、备份和自检。
 - 升级 Next.js 到 16.4.6，并为受影响的前端传递依赖添加 pnpm overrides，前端依赖审计已无已知漏洞。
-- 升级 python-multipart 到 0.0.33、pytest 到 9.2.0，修复已知依赖安全问题。
+- 升级 python-multipart 到 0.0.33、pytest 到 9.2.0、setuptools 到 84.1.0，并显式固定 lxml 6.1.3，修复已知依赖安全问题。
+- 为 docxcompose 增加 `pkg_resources` 兼容层，兼容新版 setuptools 并保留合并文档的图片/页眉能力。
 
 ### 修复
 

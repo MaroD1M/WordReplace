@@ -10,6 +10,7 @@ from app.services.replace_service import (
     _build_filename,
     clean_filename,
     export_zip,
+    merge_word_documents,
     replace_word_with_format,
     sign_export_token,
     verify_export_token,
@@ -135,3 +136,21 @@ def test_export_zip_deduplicates_filenames():
         assert archive.namelist() == ["a.docx", "a_1.docx"]
         assert archive.read("a.docx") == b"one"
         assert archive.read("a_1.docx") == b"two"
+
+
+def test_merge_word_documents_preserves_all_documents():
+    def make_doc(text: str) -> io.BytesIO:
+        doc = Document()
+        doc.add_paragraph(text)
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return buffer
+
+    files = [
+        ReplacedFile(item_id="1", filename="a.docx", data=make_doc("A"), row_idx=0, replace_count=0),
+        ReplacedFile(item_id="2", filename="b.docx", data=make_doc("B"), row_idx=1, replace_count=0),
+    ]
+    merged = merge_word_documents(files)
+    result = Document(io.BytesIO(merged.getvalue()))
+    assert [p.text for p in result.paragraphs if p.text] == ["A", "B"]

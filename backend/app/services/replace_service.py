@@ -288,10 +288,37 @@ def _merge_fallback(replaced_files: list[ReplacedFile]) -> io.BytesIO:
     return output
 
 
+def _ensure_pkg_resources_shim() -> None:
+    """Keep docxcompose working on setuptools versions without pkg_resources.
+
+    docxcompose 1.4 only uses ``pkg_resources.resource_string`` to read its
+    bundled template. Newer setuptools releases removed pkg_resources, so we
+    provide the single function it needs via importlib.resources.
+    """
+    try:
+        import pkg_resources  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    import importlib.resources
+    import sys
+    import types
+
+    shim = types.ModuleType("pkg_resources")
+
+    def resource_string(package: str, resource: str) -> bytes:
+        return importlib.resources.files(package).joinpath(resource).read_bytes()
+
+    shim.resource_string = resource_string  # type: ignore[attr-defined]
+    sys.modules["pkg_resources"] = shim
+
+
 def merge_word_documents(replaced_files: list[ReplacedFile]) -> io.BytesIO:
     if not replaced_files:
         raise ValueError("没有可合并文档")
 
+    _ensure_pkg_resources_shim()
     try:
         from docxcompose.composer import Composer
     except ImportError:
