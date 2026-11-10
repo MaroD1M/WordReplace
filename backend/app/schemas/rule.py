@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class RuleCreate(BaseModel):
@@ -12,9 +12,8 @@ class RuleUpdate(BaseModel):
 
 
 class RuleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     keyword: str
     excel_column: str
-
-    class Config:
-        from_attributes = True

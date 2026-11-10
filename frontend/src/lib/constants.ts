@@ -7,7 +7,9 @@ export const MIN_CONTENT_WIDTH = 1100;
 export const MAX_FONT_SIZE = 18;
 export const MIN_FONT_SIZE = 14;
 
-export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "2.0.5";
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "3.0.0";
+export const MAX_UPLOAD_SIZE_MB = 50;
+export const RESULT_PAGE_SIZE = 50;
 
 export const SEQ_FORMATS: Array<{ value: SeqFormat; label: string }> = [
   { value: "1", label: "1, 2, 3" },

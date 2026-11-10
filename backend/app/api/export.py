@@ -21,6 +21,31 @@ def export_modes() -> dict[str, list[str]]:
     return {"modes": ["zip", "merge"]}
 
 
+@router.get("/details/{run_id}")
+def export_details(
+    run_id: str,
+    token: str = Query(...),
+    page: int = Query(1),
+    page_size: int = Query(50),
+):
+    if not verify_export_token(run_id, token):
+        raise HTTPException(status_code=403, detail="导出令牌无效")
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="任务不存在或已过期")
+    if page < 1 or page_size < 1 or page_size > 200:
+        raise HTTPException(status_code=400, detail="分页参数无效")
+    details = run.get("details", [])
+    start = (page - 1) * page_size
+    end = start + page_size
+    return {
+        "total": len(details),
+        "page": page,
+        "page_size": page_size,
+        "details": details[start:end],
+    }
+
+
 @router.get("/zip/{run_id}")
 def download_zip(run_id: str, token: str = Query(...)):
     if not verify_export_token(run_id, token):

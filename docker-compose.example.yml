@@ -1,22 +1,40 @@
-version: "3.9"
-
 services:
   wordreplace:
     image: ghcr.io/marod1m/wordreplace:latest
     container_name: wordreplace
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "12344:8000"
     volumes:
       - ./data:/app/data
     environment:
       # 仅允许这些前端来源跨域调用 API（逗号分隔）
-      CORS_ALLOW_ORIGINS: "http://localhost:12344"
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:12344}"
+      # 公网部署时建议改成你的域名；保持 "*" 表示不限制 Host
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-*}"
       # 上传文件大小限制（MB）
-      MAX_UPLOAD_SIZE_MB: "50"
-      # 结果缓存有效期（秒）
-      RUN_CACHE_TTL_SECONDS: "1800"
-      # 结果缓存最大记录数
-      RUN_CACHE_MAX_ENTRIES: "200"
+      MAX_UPLOAD_SIZE_MB: "${MAX_UPLOAD_SIZE_MB:-50}"
+      # Excel 数据行数 / 单元格 / 规则数量上限
+      MAX_EXCEL_ROWS: "${MAX_EXCEL_ROWS:-20000}"
+      MAX_EXCEL_CELLS: "${MAX_EXCEL_CELLS:-200000}"
+      MAX_REPLACE_RULES: "${MAX_REPLACE_RULES:-500}"
+      # 预览返回的最大行数 / 字符数
+      MAX_PREVIEW_ROWS: "${MAX_PREVIEW_ROWS:-25}"
+      MAX_PREVIEW_CHARS: "${MAX_PREVIEW_CHARS:-20000}"
+      # 结果缓存有效期 / 条数 / 总字节上限
+      RUN_CACHE_TTL_SECONDS: "${RUN_CACHE_TTL_SECONDS:-1800}"
+      RUN_CACHE_MAX_ENTRIES: "${RUN_CACHE_MAX_ENTRIES:-200}"
+      RUN_CACHE_MAX_BYTES: "${RUN_CACHE_MAX_BYTES:-536870912}"
+      # 同时执行的任务数（个人使用建议 1）
+      MAX_CONCURRENT_RUNS: "${MAX_CONCURRENT_RUNS:-1}"
       # 导出签名密钥：生产环境请替换为强随机字符串
-      EXPORT_TOKEN_SECRET: "please-change-to-a-long-random-secret"
+      EXPORT_TOKEN_SECRET: "${EXPORT_TOKEN_SECRET:-please-change-to-a-long-random-secret}"
+      # 数据库连接地址（默认使用挂载的 /app/data 目录）
+      DATABASE_URL: "${DATABASE_URL:-sqlite:////app/data/wordreplace.db}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

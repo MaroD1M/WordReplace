@@ -52,6 +52,7 @@ Thumbs.db
 
 # Security: local secrets and credentials
 .env.*
+!.env.example
 *.env
 *.pem
 *.key
@@ -95,8 +96,12 @@ node_modules/
 .taskmaster/
 backend/.venv/
 backend/wordreplace.db
+backend/test_wordreplace.db
+data/
+data.backup-*/
 frontend/node_modules/
 frontend/.next/
+frontend/out/
 frontend/tsconfig.tsbuildinfo
 
 # Keep frontend API client in repo

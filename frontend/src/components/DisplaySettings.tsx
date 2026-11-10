@@ -25,7 +25,7 @@ export default function DisplaySettings({
   onToggleAdvanced,
 }: DisplaySettingsProps) {
   return (
-    <div className="hidden xl:block fixed right-4 top-28 z-20 w-52">
+    <div className="hidden 2xl:block fixed right-4 top-28 z-20 w-52">
       <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm space-y-3">
         <p className="text-xs font-semibold text-slate-500">显示设置</p>
         <label className="block text-xs">

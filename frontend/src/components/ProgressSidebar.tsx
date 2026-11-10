@@ -8,7 +8,7 @@ export default function ProgressSidebar({
   onScrollToStep: (anchor: string) => void;
 }) {
   return (
-    <div className="hidden xl:block fixed left-4 top-28 z-20 w-40">
+    <div className="hidden 2xl:block fixed left-4 top-28 z-20 w-40">
       <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm">
         <p className="mb-2 text-xs font-semibold text-slate-500">流程进度</p>
         {STEP_ANCHORS.map((step, idx) => {

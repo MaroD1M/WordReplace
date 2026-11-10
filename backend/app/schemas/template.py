@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class RuleTemplateItemPayload(BaseModel):
     keyword: str = Field(min_length=1, max_length=255)
@@ -11,28 +12,29 @@ class RuleTemplateCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     creator: str = Field(min_length=1, max_length=255)
     description: str = Field(default="", max_length=2000)
-    items: list[RuleTemplateItemPayload] = Field(default_factory=list)
+    items: list[RuleTemplateItemPayload] = Field(default_factory=list, max_length=500)
 
 
 class RuleTemplateUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     creator: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=2000)
-    items: list[RuleTemplateItemPayload] | None = None
+    items: list[RuleTemplateItemPayload] | None = Field(default=None, max_length=500)
 
 
 class RuleTemplateItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     keyword: str
     excel_column: str
     order_index: int
     is_valid: bool
 
-    class Config:
-        from_attributes = True
-
 
 class RuleTemplateRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     creator: str
@@ -41,9 +43,6 @@ class RuleTemplateRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: list[RuleTemplateItemRead]
-
-    class Config:
-        from_attributes = True
 
 
 class RuleTemplateListItem(BaseModel):

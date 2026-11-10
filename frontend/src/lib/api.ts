@@ -2,6 +2,15 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
 export type SeqFormat = "1" | "01" | "0001" | "1." | "一";
 
+export type AppConfig = {
+  app_version: string;
+  max_upload_size_mb: number;
+  max_excel_rows: number;
+  max_replace_rules: number;
+  max_preview_rows: number;
+  run_cache_ttl_seconds: number;
+};
+
 export type Rule = {
   id: number;
   keyword: string;
@@ -59,6 +68,8 @@ export type PreviewData = {
   excel_columns: string[];
   excel_rows: string[][];
   excel_total_rows: number;
+  sheet_names: string[];
+  selected_sheet: string;
 };
 
 /**
@@ -84,6 +95,12 @@ export async function parseApiError(res: Response, fallback: string): Promise<st
   } catch {
     return fallback;
   }
+}
+
+export async function fetchAppConfig(): Promise<AppConfig> {
+  const res = await fetch(`${API_BASE}/config`, { cache: "no-store" });
+  if (!res.ok) throw new Error(await parseApiError(res, "加载应用配置失败"));
+  return res.json();
 }
 
 export async function fetchTemplates(): Promise<RuleTemplateListItem[]> {
@@ -130,10 +147,16 @@ export async function applyTemplate(
   return res.json();
 }
 
-export async function previewFiles(wordFile: File, excelFile: File, signal?: AbortSignal): Promise<PreviewData> {
+export async function previewFiles(
+  wordFile: File,
+  excelFile: File,
+  signal?: AbortSignal,
+  sheetName = "",
+): Promise<PreviewData> {
   const form = new FormData();
   form.append("word_file", wordFile);
   form.append("excel_file", excelFile);
+  form.append("sheet_name", sheetName);
   const res = await fetch(`${API_BASE}/preview`, { method: "POST", body: form, signal });
   if (!res.ok) throw new Error(await parseApiError(res, "预览失败"));
   return res.json();
@@ -151,6 +174,8 @@ export async function executeReplace(payload: {
   seqColumn: string;
   namePrefix: string;
   nameSuffix: string;
+  sheetName: string;
+  keepPlaceholderOnEmpty: boolean;
 }): Promise<ReplaceSummary> {
   const form = new FormData();
   form.append("word_file", payload.wordFile);
@@ -165,6 +190,8 @@ export async function executeReplace(payload: {
   form.append("seq_column", payload.seqColumn);
   form.append("name_prefix", payload.namePrefix);
   form.append("name_suffix", payload.nameSuffix);
+  form.append("sheet_name", payload.sheetName);
+  form.append("keep_placeholder_on_empty", String(payload.keepPlaceholderOnEmpty));
 
   const res = await fetch(`${API_BASE}/replace/execute`, { method: "POST", body: form });
   if (!res.ok) throw new Error(await parseApiError(res, "执行替换失败"));

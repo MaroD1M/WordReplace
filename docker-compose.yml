@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   wordreplace:
     build:
@@ -7,9 +5,29 @@ services:
       dockerfile: Dockerfile
     container_name: wordreplace
     restart: unless-stopped
+    stop_grace_period: 30s
     ports:
       - "12344:8000"
-    # 可选：持久化 SQLite 数据库
-    # volumes:
-    #   - ./data:/app/data
-
+    volumes:
+      - ./data:/app/data
+    environment:
+      CORS_ALLOW_ORIGINS: "${CORS_ALLOW_ORIGINS:-http://localhost:12344,http://localhost:3000}"
+      ALLOWED_HOSTS: "${ALLOWED_HOSTS:-*}"
+      MAX_UPLOAD_SIZE_MB: "${MAX_UPLOAD_SIZE_MB:-50}"
+      MAX_EXCEL_ROWS: "${MAX_EXCEL_ROWS:-20000}"
+      MAX_EXCEL_CELLS: "${MAX_EXCEL_CELLS:-200000}"
+      MAX_REPLACE_RULES: "${MAX_REPLACE_RULES:-500}"
+      MAX_PREVIEW_ROWS: "${MAX_PREVIEW_ROWS:-25}"
+      MAX_PREVIEW_CHARS: "${MAX_PREVIEW_CHARS:-20000}"
+      RUN_CACHE_TTL_SECONDS: "${RUN_CACHE_TTL_SECONDS:-1800}"
+      RUN_CACHE_MAX_ENTRIES: "${RUN_CACHE_MAX_ENTRIES:-200}"
+      RUN_CACHE_MAX_BYTES: "${RUN_CACHE_MAX_BYTES:-536870912}"
+      MAX_CONCURRENT_RUNS: "${MAX_CONCURRENT_RUNS:-1}"
+      EXPORT_TOKEN_SECRET: "${EXPORT_TOKEN_SECRET:-please-change-to-a-long-random-secret}"
+      DATABASE_URL: "${DATABASE_URL:-sqlite:////app/data/wordreplace.db}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

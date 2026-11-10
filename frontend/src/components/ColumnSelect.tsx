@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 type ColumnSelectProps = {
@@ -13,7 +13,7 @@ type ColumnSelectProps = {
   ariaLabel?: string;
 };
 
-type PopupRect = { left: number; top: number; width: number };
+type PopupRect = { left: number; top: number; width: number; maxHeight: number };
 
 /**
  * Searchable column picker.
@@ -32,6 +32,7 @@ export default function ColumnSelect({
   inputClassName,
   ariaLabel,
 }: ColumnSelectProps) {
+  const listboxId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -42,8 +43,7 @@ export default function ColumnSelect({
   const filtered = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     if (!keyword) return options;
-    const matched = options.filter((option) => option.toLowerCase().includes(keyword));
-    return matched.length > 0 ? matched : options;
+    return options.filter((option) => option.toLowerCase().includes(keyword));
   }, [options, query]);
 
   useEffect(() => {
@@ -55,7 +55,12 @@ export default function ColumnSelect({
       const box = el.getBoundingClientRect();
       const width = Math.min(Math.max(box.width, 280), window.innerWidth - 16);
       const left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
-      setRect({ left, top: box.bottom + 4, width });
+      const spaceBelow = window.innerHeight - box.bottom - 8;
+      const spaceAbove = box.top - 8;
+      const openAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+      const maxHeight = Math.min(240, Math.max(120, openAbove ? spaceAbove : spaceBelow));
+      const top = openAbove ? box.top - maxHeight - 4 : box.bottom + 4;
+      setRect({ left, top, width, maxHeight });
     };
 
     updateRect();
@@ -76,6 +81,11 @@ export default function ColumnSelect({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(`${listboxId}-option-${highlight}`)?.scrollIntoView({ block: "nearest" });
+  }, [highlight, listboxId, open]);
+
   function commit(option: string) {
     onChange(option);
     setQuery("");
@@ -95,15 +105,18 @@ export default function ColumnSelect({
     }
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setHighlight((current) => Math.min(current + 1, filtered.length - 1));
+      setHighlight((current) => Math.max(0, Math.min(current + 1, filtered.length - 1)));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
-      setHighlight((current) => Math.max(current - 1, 0));
+      setHighlight((current) => Math.max(0, current - 1));
     } else if (event.key === "Enter" && open && filtered[highlight]) {
       event.preventDefault();
       commit(filtered[highlight]);
     }
   }
+
+  const activeOptionId =
+    open && filtered[highlight] ? `${listboxId}-option-${highlight}` : undefined;
 
   return (
     <>
@@ -114,6 +127,11 @@ export default function ColumnSelect({
         placeholder={placeholder}
         disabled={disabled}
         aria-label={ariaLabel}
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? listboxId : undefined}
+        aria-activedescendant={activeOptionId}
+        role="combobox"
         title={value}
         autoComplete="off"
         onFocus={() => {
@@ -133,16 +151,24 @@ export default function ColumnSelect({
         ? createPortal(
             <div
               ref={listRef}
+              id={listboxId}
               role="listbox"
-              style={{ position: "fixed", left: rect.left, top: rect.top, width: rect.width }}
-              className="z-[100] max-h-60 overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
+              style={{
+                position: "fixed",
+                left: rect.left,
+                top: rect.top,
+                width: rect.width,
+                maxHeight: rect.maxHeight,
+              }}
+              className="z-[100] overflow-auto rounded-md border border-slate-300 bg-white py-1 text-sm shadow-lg"
             >
               {filtered.length === 0 ? (
-                <div className="px-3 py-2 text-slate-400">暂无可选列</div>
+                <div className="px-3 py-2 text-slate-400">无匹配项，可直接输入</div>
               ) : (
                 filtered.map((option, index) => (
                   <button
                     key={option}
+                    id={`${listboxId}-option-${index}`}
                     type="button"
                     role="option"
                     aria-selected={option === value}

@@ -1,27 +1,66 @@
+import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 
+from app.core.config import settings
 from app.core.uploads import (
     ALLOWED_EXCEL_EXT,
     ALLOWED_WORD_EXT,
-    validate_size,
+    OLE_MAGIC,
+    ZIP_MAGIC,
+    read_upload_limited,
+    validate_magic,
     validate_upload,
 )
 from app.schemas.replace import ExecuteResponse, ReplaceSummary
 from app.services.replace_service import cache_run, run_replace, sign_export_token
 
 router = APIRouter(prefix="/replace", tags=["replace"])
+logger = logging.getLogger("wordreplace")
+
+_RUN_SEMAPHORE = asyncio.Semaphore(max(1, settings.max_concurrent_runs))
+
+
+def _parse_rules(rules_json: str) -> list[dict[str, str]]:
+    try:
+        parsed_rules = json.loads(rules_json)
+        if not isinstance(parsed_rules, list):
+            raise ValueError
+    except Exception:
+        raise HTTPException(status_code=400, detail="规则参数格式错误")
+
+    if len(parsed_rules) > settings.max_replace_rules:
+        raise HTTPException(
+            status_code=400,
+            detail=f"规则数量超过限制（最多 {settings.max_replace_rules} 条）",
+        )
+
+    rules = []
+    for item in parsed_rules:
+        if not isinstance(item, dict):
+            continue
+        keyword = str(item.get("keyword", "")).strip()
+        excel_column = str(item.get("excel_column", "")).strip()
+        if not keyword or not excel_column:
+            continue
+        if len(keyword) > 255 or len(excel_column) > 255:
+            raise HTTPException(status_code=400, detail="规则关键字或列名过长")
+        rules.append({"keyword": keyword, "excel_column": excel_column})
+    if not rules:
+        raise HTTPException(status_code=400, detail="请先添加至少一条有效规则")
+    return rules
 
 
 @router.post("/execute", response_model=ExecuteResponse)
 async def execute_replace(
     word_file: UploadFile = File(...),
     excel_file: UploadFile = File(...),
-    start_row: int = Form(...),
-    end_row: int = Form(...),
-    file_name_column: str = Form(...),
+    start_row: int = Form(..., ge=1),
+    end_row: int = Form(..., ge=1),
+    file_name_column: str = Form(..., min_length=1, max_length=255),
     export_mode: str = Form("zip"),
     rules_json: str = Form(...),
     use_seq_prefix: bool = Form(False),
@@ -29,6 +68,8 @@ async def execute_replace(
     seq_column: str = Form(""),
     name_prefix: str = Form(""),
     name_suffix: str = Form(""),
+    sheet_name: str = Form(""),
+    keep_placeholder_on_empty: bool = Form(False),
 ):
     if start_row > end_row:
         raise HTTPException(status_code=400, detail="起始行不能大于结束行")
@@ -39,42 +80,38 @@ async def execute_replace(
     validate_upload(word_file, ALLOWED_WORD_EXT, "Word")
     validate_upload(excel_file, ALLOWED_EXCEL_EXT, "Excel")
 
-    try:
-        parsed_rules = json.loads(rules_json)
-        if not isinstance(parsed_rules, list):
-            raise ValueError
-        rules = []
-        for item in parsed_rules:
-            keyword = str(item.get("keyword", "")).strip()
-            excel_column = str(item.get("excel_column", "")).strip()
-            if not keyword or not excel_column:
-                continue
-            rules.append({"keyword": keyword, "excel_column": excel_column})
-    except Exception:
-        raise HTTPException(status_code=400, detail="规则参数格式错误")
-    if not rules:
-        raise HTTPException(status_code=400, detail="请先添加至少一条有效规则")
+    rules = _parse_rules(rules_json)
 
-    word_bytes = await word_file.read()
-    excel_bytes = await excel_file.read()
-    validate_size(word_bytes, "Word")
-    validate_size(excel_bytes, "Excel")
+    word_bytes = await read_upload_limited(word_file, "Word")
+    excel_bytes = await read_upload_limited(excel_file, "Excel")
+    validate_magic(word_bytes, "Word", (ZIP_MAGIC,))
+    validate_magic(excel_bytes, "Excel", (ZIP_MAGIC, OLE_MAGIC))
 
-    result = await run_in_threadpool(
-        run_replace,
-        word_bytes=word_bytes,
-        excel_bytes=excel_bytes,
-        rules=rules,
-        start_row=start_row,
-        end_row=end_row,
-        file_name_column=file_name_column,
-        use_seq_prefix=use_seq_prefix,
-        seq_format=seq_format,
-        seq_column=seq_column.strip(),
-        name_prefix=name_prefix,
-        name_suffix=name_suffix,
-    )
-    run_id = cache_run(result)
+    async with _RUN_SEMAPHORE:
+        try:
+            result = await run_in_threadpool(
+                run_replace,
+                word_bytes=word_bytes,
+                excel_bytes=excel_bytes,
+                rules=rules,
+                start_row=start_row,
+                end_row=end_row,
+                file_name_column=file_name_column,
+                use_seq_prefix=use_seq_prefix,
+                seq_format=seq_format,
+                seq_column=seq_column.strip(),
+                name_prefix=name_prefix,
+                name_suffix=name_suffix,
+                sheet_name=sheet_name.strip(),
+                keep_placeholder_on_empty=keep_placeholder_on_empty,
+            )
+            run_id = cache_run(result)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            logger.exception("replace execution failed")
+            raise HTTPException(status_code=400, detail=f"文件解析失败: {exc}")
+
     export_token = sign_export_token(run_id)
 
     return ExecuteResponse(

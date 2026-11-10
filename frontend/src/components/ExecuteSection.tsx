@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import type { PreviewData, ReplaceSummary, SeqFormat } from "@/lib/api";
 import { SEQ_FORMATS } from "@/lib/constants";
@@ -24,6 +24,8 @@ type ExecuteSectionProps = {
   setNamePrefix: (value: string) => void;
   nameSuffix: string;
   setNameSuffix: (value: string) => void;
+  keepPlaceholderOnEmpty: boolean;
+  setKeepPlaceholderOnEmpty: (value: boolean) => void;
   executing: boolean;
   canExecute: boolean;
   executeHint: string;
@@ -50,6 +52,8 @@ export default function ExecuteSection({
   setNamePrefix,
   nameSuffix,
   setNameSuffix,
+  keepPlaceholderOnEmpty,
+  setKeepPlaceholderOnEmpty,
   executing,
   canExecute,
   executeHint,
@@ -60,6 +64,20 @@ export default function ExecuteSection({
   showAdvanced,
 }: ExecuteSectionProps) {
   const excelColumns = preview?.excel_columns ?? [];
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!executing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the timer when execution ends
+      setElapsedSeconds(0);
+      return;
+    }
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [executing]);
 
   return (
     <>
@@ -75,6 +93,7 @@ export default function ExecuteSection({
                   className="wr-input"
                   type="number"
                   min={1}
+                  step={1}
                   value={startRow === 0 ? "" : startRow}
                   onChange={(event) => setStartRow(event.target.value === "" ? 0 : Number(event.target.value))}
                   onBlur={() => {
@@ -88,6 +107,7 @@ export default function ExecuteSection({
                   className="wr-input"
                   type="number"
                   min={1}
+                  step={1}
                   value={endRow === 0 ? "" : endRow}
                   onChange={(event) => setEndRow(event.target.value === "" ? 0 : Number(event.target.value))}
                   onBlur={() => {
@@ -103,6 +123,7 @@ export default function ExecuteSection({
                   options={excelColumns}
                   placeholder="请选择文件名来源列"
                   ariaLabel="选择文件名来源列"
+                  disabled={excelColumns.length === 0}
                 />
               </label>
             </div>
@@ -146,12 +167,25 @@ export default function ExecuteSection({
                 <input className="wr-input" value={nameSuffix} onChange={(event) => setNameSuffix(event.target.value)} />
               </label>
             </div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={keepPlaceholderOnEmpty}
+                onChange={(event) => setKeepPlaceholderOnEmpty(event.target.checked)}
+              />
+              Excel 单元格为空时保留原占位符（不替换为空）
+            </label>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button disabled={!canExecute || executing} className="wr-btn wr-btn-primary disabled:opacity-50">
+            <button
+              disabled={!canExecute || executing}
+              aria-busy={executing}
+              className="wr-btn wr-btn-primary disabled:opacity-50"
+            >
               {executing ? "执行中..." : "开始替换"}
             </button>
+            {executing ? <span className="text-xs text-slate-500">已用时 {elapsedSeconds}s</span> : null}
             <span className="text-xs text-slate-500">{executeHint}</span>
           </div>
         </form>

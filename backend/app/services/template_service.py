@@ -14,7 +14,9 @@ from app.schemas.template import (
 
 
 def _bj_str(dt):
-    return dt.astimezone(timezone.utc).astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def ensure_legacy_rules_template(db: Session) -> None:
@@ -33,7 +35,13 @@ def ensure_legacy_rules_template(db: Session) -> None:
 
 
 def list_templates(db: Session) -> list[dict]:
-    rows = db.query(RuleTemplate).filter(RuleTemplate.is_active.is_(True)).order_by(RuleTemplate.updated_at.desc()).all()
+    rows = (
+        db.query(RuleTemplate)
+        .options(selectinload(RuleTemplate.items))
+        .filter(RuleTemplate.is_active.is_(True))
+        .order_by(RuleTemplate.updated_at.desc())
+        .all()
+    )
     return [
         {
             "id": t.id,

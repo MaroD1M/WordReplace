@@ -13,6 +13,16 @@ PATTERNS=(
   'BEGIN [A-Z ]*PRIVATE KEY'
 )
 
+scan_patch() {
+  local patch="$1"
+  local pat="$2"
+  if command -v rg >/dev/null 2>&1; then
+    printf '%s\n' "$patch" | rg -n --pcre2 "$pat" >/dev/null 2>&1
+  else
+    printf '%s\n' "$patch" | grep -Eq -- "$pat"
+  fi
+}
+
 FILES=$(git diff --cached --name-only --diff-filter=ACMR)
 if [ -z "$FILES" ]; then
   exit 0
@@ -28,8 +38,7 @@ for f in $FILES; do
 
   patch=$(git diff --cached -- "$f" | sed -n 's/^+//p')
   for pat in "${PATTERNS[@]}"; do
-    if printf '%s
-' "$patch" | rg -n --pcre2 "$pat" >/dev/null 2>&1; then
+    if scan_patch "$patch" "$pat"; then
       echo "[pre-commit] Potential secret detected in staged changes: $f"
       echo "[pre-commit] Pattern: $pat"
       status=1

@@ -43,8 +43,8 @@ export default function RulesSection({ preview, rules, setRules, onError, showAd
   useEffect(() => {
     fetchTemplates()
       .then(setTemplates)
-      .catch(() => void 0);
-  }, []);
+      .catch((err) => onError(err instanceof Error ? err.message : "加载模板库失败"));
+  }, [onError]);
 
   function onSubmitRule(event: FormEvent) {
     event.preventDefault();
@@ -214,13 +214,13 @@ export default function RulesSection({ preview, rules, setRules, onError, showAd
         </form>
 
         <div className="overflow-x-auto rounded-md border border-slate-300">
-          <table className="w-full table-fixed text-sm">
+          <table className="w-full table-fixed text-sm" aria-label="替换规则">
             <thead className="bg-slate-200">
               <tr>
-                <th className="w-20 px-3 py-2 text-center">序号</th>
-                <th className="px-3 py-2 text-center">模板关键字</th>
-                <th className="px-3 py-2 text-center">Excel 列名</th>
-                <th className="w-44 px-3 py-2 text-center">操作</th>
+                <th scope="col" className="w-20 px-3 py-2 text-center">序号</th>
+                <th scope="col" className="px-3 py-2 text-center">模板关键字</th>
+                <th scope="col" className="px-3 py-2 text-center">Excel 列名</th>
+                <th scope="col" className="w-44 px-3 py-2 text-center">操作</th>
               </tr>
             </thead>
             <tbody>

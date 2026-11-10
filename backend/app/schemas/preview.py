@@ -6,3 +6,5 @@ class PreviewResponse(BaseModel):
     excel_columns: list[str]
     excel_rows: list[list[str]]
     excel_total_rows: int
+    sheet_names: list[str] = []
+    selected_sheet: str = ""
