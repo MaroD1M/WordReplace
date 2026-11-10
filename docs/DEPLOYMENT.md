@@ -39,7 +39,7 @@ cd wordreplace
 ```yaml
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
     container_name: wordreplace
     restart: unless-stopped
     ports:
@@ -66,7 +66,7 @@ services:
 - 左边端口 `12344` 可改，右边 `8000` 不要改。
 - `./data:/app/data` 用来保存 SQLite 数据库，建议保留。
 - `EXPORT_TOKEN_SECRET` 必须替换成随机字符串，不要直接使用示例值。
-- 生产环境建议固定版本标签（本示例为 `v3.0.0`），不要长期使用 `latest`。
+- 生产环境建议固定镜像标签（本示例为 `3.0.0`；GitHub 发布标签为 `v3.0.0`），不要长期使用 `latest`。
 
 生成随机密钥的示例：
 
@@ -149,7 +149,7 @@ sudo mkdir -p /volume1/docker/wordreplace/data
 ```yaml
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
     container_name: wordreplace
     restart: unless-stopped
     ports:
@@ -449,7 +449,7 @@ curl -fsS http://localhost:12344/health/ready
 修改 compose：
 
 ```yaml
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
 ```
 
 执行：

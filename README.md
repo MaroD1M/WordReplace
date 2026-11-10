@@ -95,7 +95,7 @@ docker compose -f docker-compose.example.yml up -d
 ```yaml
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
     container_name: wordreplace
     restart: unless-stopped
     ports:
@@ -126,7 +126,7 @@ docker compose up -d
 - `12344:8000` 中，左边的 `12344` 是宿主机端口，可自行修改；右边 `8000` 是容器内端口，不要改。
 - `./data:/app/data` 用于持久化 SQLite 数据库（规则模板等）。建议保留。
 - 生产环境请务必修改 `EXPORT_TOKEN_SECRET`，并把 `ALLOWED_HOSTS` 改成你的域名。
-- 建议固定版本标签（如 `v3.0.0`），不要长期使用 `latest`。
+- 建议固定镜像标签（如 `3.0.0`；GitHub 发布标签为 `v3.0.0`），不要长期使用 `latest`。
 
 ---
 
@@ -218,7 +218,7 @@ docker compose up -d
 
 固定版本升级或回滚：
 
-1. 修改 compose 中的镜像标签（例如 `v3.0.0`）。
+1. 修改 compose 中的镜像标签（例如 `3.0.0`）。
 2. 执行：
 
 ```bash

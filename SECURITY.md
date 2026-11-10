@@ -211,7 +211,7 @@ sudo htpasswd -c /etc/nginx/.htpasswd youruser
 ```yaml
 services:
   wordreplace:
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
     container_name: wordreplace
     restart: unless-stopped
     ports:

@@ -442,7 +442,7 @@ python3 scripts/sync_version.py
 python3 scripts/sync_version.py --check
 ```
 
-3. 确认 compose 中的镜像标签与版本一致，例如 `v3.0.0`。
+3. 确认 compose 中的镜像标签与版本一致，例如 `3.0.0`（GitHub 发布标签为 `v3.0.0`）。
 4. 重新拉取并重建：
 
 ```bash

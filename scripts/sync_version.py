@@ -41,12 +41,47 @@ TARGETS = [
     ),
     (
         ROOT / "README.md",
-        re.compile(r"(wordreplace:v)\d+\.\d+\.\d+"),
+        re.compile(r"(wordreplace:)(?:v)?\d+\.\d+\.\d+"),
         r"\g<1>{version}",
     ),
     (
         ROOT / "README.md",
-        re.compile(r"(例如 `v)\d+\.\d+\.\d+(`)"),
+        re.compile(r"(当前版本：\*\*v)\d+\.\d+\.\d+(\*\*)"),
+        r"\g<1>{version}\g<2>",
+    ),
+    (
+        ROOT / "README.md",
+        re.compile(r"(如 `)\d+\.\d+\.\d+(`；GitHub 发布标签为)"),
+        r"\g<1>{version}\g<2>",
+    ),
+    (
+        ROOT / "README.md",
+        re.compile(r"(例如 `)\d+\.\d+\.\d+(`)"),
+        r"\g<1>{version}\g<2>",
+    ),
+    (
+        ROOT / "SECURITY.md",
+        re.compile(r"(wordreplace:)(?:v)?\d+\.\d+\.\d+"),
+        r"\g<1>{version}",
+    ),
+    (
+        ROOT / "docs/DEPLOYMENT.md",
+        re.compile(r"(wordreplace:)(?:v)?\d+\.\d+\.\d+"),
+        r"\g<1>{version}",
+    ),
+    (
+        ROOT / "docs/DEPLOYMENT.md",
+        re.compile(r"(本示例为 `)\d+\.\d+\.\d+(`)"),
+        r"\g<1>{version}\g<2>",
+    ),
+    (
+        ROOT / "docs/TROUBLESHOOTING.md",
+        re.compile(r"(例如 `)\d+\.\d+\.\d+(`（GitHub)"),
+        r"\g<1>{version}\g<2>",
+    ),
+    (
+        ROOT / "GETTING_STARTED.md",
+        re.compile(r"(当前版本为 \*\*v)\d+\.\d+\.\d+(\*\*)"),
         r"\g<1>{version}\g<2>",
     ),
 ]

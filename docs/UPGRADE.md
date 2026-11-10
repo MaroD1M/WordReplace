@@ -67,7 +67,7 @@ tar -czf "wordreplace-data-$(date +%Y%m%d-%H%M%S).tar.gz" ./data
 编辑或查看 `docker-compose.yml`，把当前的 `image:` 行复制到文本里保存。例如：
 
 ```yaml
-    image: ghcr.io/marod1m/wordreplace:v2.0.5
+    image: ghcr.io/marod1m/wordreplace:2.0.5
 ```
 
 ### 1.4 重新启动（如果暂时不升级）
@@ -87,7 +87,7 @@ docker compose start
 例如从 `v2.0.5` 升级到 `v3.0.0`：
 
 ```yaml
-    image: ghcr.io/marod1m/wordreplace:v3.0.0
+    image: ghcr.io/marod1m/wordreplace:3.0.0
 ```
 
 如果暂时使用最新版：
@@ -198,7 +198,7 @@ docker compose logs --tail=200 wordreplace
 1. 把 `docker-compose.yml` 中的镜像标签改回旧版本，例如：
 
 ```yaml
-    image: ghcr.io/marod1m/wordreplace:v2.0.5
+    image: ghcr.io/marod1m/wordreplace:2.0.5
 ```
 
 2. 拉取并启动：
