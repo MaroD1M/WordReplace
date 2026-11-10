@@ -3,6 +3,13 @@
   "version": "3.0.0",
   "private": true,
   "packageManager": "pnpm@10.17.1",
+  "pnpm": {
+    "overrides": {
+      "browserslist": ">=4.28.7",
+      "baseline-browser-mapping": ">=2.11.0",
+      "source-map-js": ">=1.2.2"
+    }
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,7 +17,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.2.6",
+    "next": "16.4.6",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -20,7 +27,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.6",
+    "eslint-config-next": "16.4.6",
     "postcss": "^8.5.15",
     "tailwindcss": "^4",
     "typescript": "^5"

@@ -33,6 +33,8 @@
 - 前端上传与预览增加防抖和请求取消，长列名选择器完整显示并可搜索。
 - 文档体系重构：新增部署、排障、架构、API、升级、安全、贡献指南。
 - 新增 `.env.example`、`scripts/backup.sh`、`scripts/restore.sh`、`scripts/check_all.sh`，便于配置、备份和自检。
+- 升级 Next.js 到 16.4.6，并为受影响的前端传递依赖添加 pnpm overrides，生产依赖审计已无已知漏洞。
+- 升级 python-multipart 到 0.0.33、pytest 到 9.2.0，修复已知依赖安全问题。
 
 ### 修复
 
