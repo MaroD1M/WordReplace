@@ -3,7 +3,6 @@ name: Build and Push Single Image
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ main ]
@@ -17,6 +16,10 @@ on:
       - 'entrypoint.sh'
       - 'docker-compose*.yml'
       - '.dockerignore'
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   REGISTRY: ghcr.io
@@ -110,7 +113,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=semver,pattern={{version}}
 
       - name: Build and push
