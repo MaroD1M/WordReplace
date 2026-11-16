@@ -8,6 +8,8 @@
 
 当前版本：**v3.0.0**（以根目录 [`VERSION`](VERSION) 为准）
 
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+
 ---
 
 ## 目录
@@ -411,4 +413,8 @@ python3 scripts/sync_version.py --check
 
 ## 许可证
 
-本项目使用 MIT License，详见 [LICENSE](LICENSE)。
+Copyright (c) 2026 MaroD1M
+
+本项目使用 [GNU Affero General Public License v3.0（AGPL-3.0）](LICENSE) 发布。
+你可以自由使用、修改和分发本项目，但分发衍生作品或通过网络向用户提供服务时，
+必须按 AGPL-3.0 的要求提供完整对应源码。详见 [LICENSE](LICENSE)。
