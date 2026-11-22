@@ -46,8 +46,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: backend/requirements-dev.txt
 
       - name: Validate version sync
         run: python3 scripts/sync_version.py --check
@@ -68,8 +66,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Validate frontend
         working-directory: frontend
@@ -127,8 +123,6 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
           provenance: true
           sbom: true
